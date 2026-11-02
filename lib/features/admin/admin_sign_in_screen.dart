@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/auth/application_role_provider.dart';
 import '../../core/supabase/supabase_providers.dart';
 import '../../core/theme/norve_theme.dart';
 
@@ -39,14 +40,43 @@ class _AdminSignInScreenState extends ConsumerState<AdminSignInScreen> {
     final config = ref.watch(supabaseConfigProvider);
     final startupError = ref.watch(supabaseStartupErrorProvider);
     final client = ref.watch(supabaseClientProvider);
+    final role = ref.watch(applicationRoleProvider).asData?.value;
     final adminAccess = ref.watch(adminAccessProvider);
-    final authorized = adminAccess.asData?.value == true;
+    final authorized = role == ApplicationRole.administrator ||
+        adminAccess.asData?.value == true;
     final accessError = adminAccess.asError?.error;
-    final hasCustomerSession =
-        client?.auth.currentUser != null && adminAccess.asData?.value == false;
+    final hasCustomerSession = role == ApplicationRole.customer ||
+        (client?.auth.currentUser != null && adminAccess.asData?.value == false);
     final unavailableMessage = startupError ?? config.configurationMessage;
     final canSignIn =
         client != null && startupError == null && config.isConfigured;
+
+    ref.listen<AsyncValue<ApplicationRole>>(applicationRoleProvider, (previous, next) {
+      if (next.asData?.value == ApplicationRole.administrator) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.go('/admin');
+        });
+      }
+    });
+
+    ref.listen<AsyncValue<bool>>(adminAccessProvider, (previous, next) {
+      if (next.asData?.value == true) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.go('/admin');
+        });
+      }
+    });
+
+    if (authorized) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go('/admin');
+      });
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -86,19 +116,8 @@ class _AdminSignInScreenState extends ConsumerState<AdminSignInScreen> {
                       'Admin Sign In',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Administrator access is verified by the database. There is no public admin registration.',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: NorveColors.muted, height: 1.5),
-                    ),
-                    const SizedBox(height: 20),
-                    if (authorized)
-                      FilledButton(
-                        onPressed: () => context.go('/admin'),
-                        child: const Text('Open Admin Dashboard'),
-                      )
-                    else if (accessError != null)
+                    const SizedBox(height: 24),
+                    if (accessError != null)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
