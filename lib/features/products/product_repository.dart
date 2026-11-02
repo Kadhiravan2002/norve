@@ -205,7 +205,6 @@ class ProductRepository {
     required String fileName,
     required Uint8List bytes,
   }) async {
-    final client = _requireClient();
     final extension = fileName.split('.').last.toLowerCase();
     if (!supportedProductImageTypes.contains(extension)) {
       throw const ProductRepositoryException(
@@ -217,7 +216,9 @@ class ProductRepository {
         'Images must be smaller than 5 MB.',
       );
     }
-    final suffix = Random.secure().nextInt(1 << 32).toRadixString(16);
+    final client = _requireClient();
+    final suffix =
+        Random.secure().nextInt(0xFFFFFFFF).toRadixString(16).padLeft(8, '0');
     final path =
         '$productId/${DateTime.now().microsecondsSinceEpoch}-$suffix.$extension';
     final contentType = switch (extension) {
@@ -236,6 +237,14 @@ class ProductRepository {
       url: client.storage.from(productImageBucket).getPublicUrl(path),
       storagePath: path,
     );
+  }
+
+  Future<void> deleteUploadedImages(List<String> paths) async {
+    final client = _client;
+    if (client == null || paths.isEmpty) return;
+    try {
+      await client.storage.from(productImageBucket).remove(paths);
+    } catch (_) {}
   }
 
   Future<void> setVariantStock(

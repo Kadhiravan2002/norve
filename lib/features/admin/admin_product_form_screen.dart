@@ -689,6 +689,19 @@ class _AdminProductFormScreenState
           .save(product, create: existing == null);
       if (mounted) context.pop();
     } catch (error) {
+      if (existing == null && savedImages.isNotEmpty) {
+        final orphanedPaths = savedImages
+            .map((img) => img.storagePath)
+            .whereType<String>()
+            .toList();
+        if (orphanedPaths.isNotEmpty) {
+          try {
+            await ref
+                .read(productRepositoryProvider)
+                .deleteUploadedImages(orphanedPaths);
+          } catch (_) {}
+        }
+      }
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.toString())));
