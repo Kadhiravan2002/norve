@@ -1,0 +1,10 @@
+{
+  "installCommand": "bash admin_web/scripts/vercel_install.sh",
+  "buildCommand": "bash admin_web/scripts/vercel_build.sh",
+  "outputDirectory": "admin_web/build/web",
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/:path*", "destination": "/index.html" }
+  ]
+}
