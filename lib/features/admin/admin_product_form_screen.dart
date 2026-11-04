@@ -5,12 +5,25 @@ import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../core/supabase/supabase_providers.dart';
-import '../../core/theme/norve_theme.dart';
 import '../products/product.dart';
 import '../products/product_catalog_provider.dart';
 import '../products/product_repository.dart';
+import '../products/widgets/catalog_state_notice.dart';
 import '../products/widgets/product_image.dart';
+import 'widgets/admin_widgets.dart';
 
+/// Redesigned NORVÉ Admin Product Details & Form Screen.
+///
+/// Implements a luxury two-column editorial product management experience
+/// inspired by the Wolfpixel Product Details visual reference for both:
+/// - Add Product (`/admin/products/new`)
+/// - Edit Product (`/admin/products/:productId/edit`)
+///
+/// Architecture:
+/// - Left column (approx. 40%): Large primary image preview, interactive thumbnail
+///   gallery, primary image selector, image uploader, and reordering.
+/// - Right column (approx. 60%): Structured cards for Basic Info, Pricing,
+///   External Image Source, Variants & Options, Inventory, and Catalogue Visibility.
 class AdminProductFormScreen extends ConsumerStatefulWidget {
   const AdminProductFormScreen({super.key, this.productId});
 
@@ -36,6 +49,7 @@ class _AdminProductFormScreenState
   late final TextEditingController _salePrice;
   late List<_AdminImage> _images;
   int _primaryImageIndex = 0;
+  int _selectedPreviewIndex = 0;
   int? _uploadingImageIndex;
   bool _requiresSize = true;
   bool _requiresColor = true;
@@ -101,11 +115,29 @@ class _AdminProductFormScreenState
       (image) => image.savedImage?.url == product?.imageUrl,
     );
     _primaryImageIndex = primaryIndex < 0 ? 0 : primaryIndex;
+    _selectedPreviewIndex = _primaryImageIndex;
     _isActive = product?.isActive ?? true;
+
+    _imageUrl.addListener(_onFormStateChanged);
+    _price.addListener(_onFormStateChanged);
+    _salePrice.addListener(_onFormStateChanged);
+    _sizes.addListener(_onFormStateChanged);
+    _colors.addListener(_onFormStateChanged);
+    _stock.addListener(_onFormStateChanged);
+  }
+
+  void _onFormStateChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _imageUrl.removeListener(_onFormStateChanged);
+    _price.removeListener(_onFormStateChanged);
+    _salePrice.removeListener(_onFormStateChanged);
+    _sizes.removeListener(_onFormStateChanged);
+    _colors.removeListener(_onFormStateChanged);
+    _stock.removeListener(_onFormStateChanged);
     _name.dispose();
     _sku.dispose();
     _description.dispose();
@@ -128,206 +160,810 @@ class _AdminProductFormScreenState
     final selectedCategory = categoryNames.contains(_category.text)
         ? _category.text
         : categoryNames.firstOrNull;
+
     if (isEditing && _existingProduct == null) {
-      return const Center(child: Text('This product is no longer available.'));
+      return Scaffold(
+        backgroundColor: AdminColors.ivory,
+        body: Center(
+          child: AdminEmptyState(
+            icon: Icons.inventory_2_outlined,
+            title: 'Product Not Found',
+            message:
+                'This product could not be located in the boutique catalogue.',
+            actionLabel: 'Return to Products',
+            onAction: () => context.go('/admin/products'),
+          ),
+        ),
+      );
     }
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              key: const ValueKey('product-form-scroll'),
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 36),
-              children: [
-                Text(
-                  isEditing ? 'Edit product' : 'Add product',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Changes are shared with the customer catalogue and inventory.',
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: NorveColors.muted),
-                ),
-                const SizedBox(height: 22),
-                _textField(_name, 'Product name', key: 'product-name'),
-                _textField(_sku, 'Product SKU', key: 'product-sku'),
-                _textField(
-                  _description,
-                  'Description',
-                  key: 'product-description',
-                  maxLines: 3,
-                ),
-                _textField(
-                  _price,
-                  'Price (INR)',
-                  key: 'product-price',
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (value) {
-                    final price = int.tryParse(value ?? '');
-                    if (price == null || price <= 0) {
-                      return 'Enter a price greater than zero.';
-                    }
-                    return null;
-                  },
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 13),
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('product-category-$selectedCategory'),
-                    initialValue: selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: 'Category',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: categoryList
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item.name,
-                            child: Text(item.name),
+
+    if (isEditing) {
+      return _buildEditLayout(context, selectedCategory, categoryList);
+    }
+
+    return _buildCreateLayout(context, selectedCategory, categoryList);
+  }
+
+  // ===========================================================================
+  // REDESIGNED EDIT LAYOUT (Wolfpixel Two-Column Architecture)
+  // ===========================================================================
+  Widget _buildEditLayout(
+    BuildContext context,
+    String? selectedCategory,
+    List<ProductCategory> categoryList,
+  ) {
+    return Scaffold(
+      backgroundColor: AdminColors.ivory,
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: CustomScrollView(
+            key: const ValueKey('product-edit-scroll'),
+            slivers: [
+              const SliverToBoxAdapter(child: CatalogStateNotice()),
+              SliverToBoxAdapter(
+                child: AdminPageHeader(
+                  breadcrumbs: InkWell(
+                    onTap: () => context.go('/admin/products'),
+                    borderRadius: AdminRadii.radiusXs,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 4,
+                        horizontal: 2,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(
+                            Icons.arrow_back,
+                            size: 14,
+                            color: AdminColors.muted,
                           ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) _category.text = value;
-                    },
-                    validator: (value) => value == null || value.isEmpty
-                        ? 'Create or select a category.'
-                        : null,
-                  ),
-                ),
-                _textField(
-                  _imageUrl,
-                  'External image URL (optional when uploading)',
-                  key: 'product-image-url',
-                  keyboardType: TextInputType.url,
-                  validator: (value) {
-                    if (_images.isNotEmpty && (value ?? '').trim().isEmpty) {
-                      return null;
-                    }
-                    final uri = Uri.tryParse((value ?? '').trim());
-                    if (uri == null ||
-                        !{'http', 'https'}.contains(uri.scheme) ||
-                        uri.host.isEmpty) {
-                      return 'Enter a valid http or https image URL.';
-                    }
-                    return null;
-                  },
-                ),
-                _textField(
-                  _salePrice,
-                  'Regular price (optional)',
-                  key: 'product-sale-price',
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return null;
-                    final regular = int.tryParse(value);
-                    final sale = int.tryParse(_price.text);
-                    if (regular == null || sale == null || regular <= sale) {
-                      return 'Regular price must be greater than the current price.';
-                    }
-                    return null;
-                  },
-                ),
-                SwitchListTile.adaptive(
-                  key: const ValueKey('product-requires-size'),
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Customer selects a size'),
-                  value: _requiresSize,
-                  onChanged: (value) => setState(() => _requiresSize = value),
-                ),
-                if (_requiresSize)
-                  _textField(
-                    _sizes,
-                    'Available sizes',
-                    key: 'product-sizes',
-                    helperText: 'Separate values with commas',
-                  ),
-                SwitchListTile.adaptive(
-                  key: const ValueKey('product-requires-color'),
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Customer selects a colour'),
-                  value: _requiresColor,
-                  onChanged: (value) => setState(() => _requiresColor = value),
-                ),
-                if (_requiresColor)
-                  _textField(
-                    _colors,
-                    'Available colours',
-                    key: 'product-colors',
-                    helperText: 'Separate colour names with commas',
-                  ),
-                if (_existingProduct == null)
-                  _textField(
-                    _stock,
-                    'Total stock across variants',
-                    key: 'product-stock',
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    validator: (value) {
-                      final stock = int.tryParse(value ?? '');
-                      return stock == null || stock < 0
-                          ? 'Stock must be zero or more.'
-                          : null;
-                    },
-                  ),
-                if (_existingProduct != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Text(
-                      'Edit individual variant stock in Admin → Inventory.',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: NorveColors.muted),
+                          SizedBox(width: 6),
+                          Text('Products', style: AdminTypography.caption),
+                        ],
+                      ),
                     ),
                   ),
-                if (_existingProduct?.variants.isNotEmpty == true) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'Variant details',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  for (final variant in _existingProduct!.variants)
-                    _variantEditor(context, variant),
-                ],
-                _buildImageManager(context),
-                SwitchListTile.adaptive(
-                  key: const ValueKey('product-active'),
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Active in customer catalogue'),
-                  value: _isActive,
-                  onChanged: (value) => setState(() => _isActive = value),
+                  title: 'Edit Product',
+                  subtitle:
+                      'Manage product information, pricing and availability.',
+                  actions: [
+                    AdminButton.secondary(
+                      label: 'Cancel',
+                      onPressed: () => context.go('/admin/products'),
+                    ),
+                    AdminButton.primary(
+                      key: const ValueKey('save-product'),
+                      label: 'Save Changes',
+                      icon: const Icon(Icons.check, size: 16),
+                      isLoading: _saving,
+                      onPressed: _saving ? null : _save,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  key: const ValueKey('save-product'),
-                  onPressed: _saving ? null : _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: NorveColors.charcoal,
-                    foregroundColor: NorveColors.white,
-                    minimumSize: const Size.fromHeight(50),
-                    shape: const RoundedRectangleBorder(),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isDesktop = constraints.maxWidth >= 960;
+                      if (isDesktop) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Left Column (Gallery) ~40%
+                            Expanded(
+                              flex: 4,
+                              child: _buildGalleryColumn(context),
+                            ),
+                            const SizedBox(width: 24),
+                            // Right Column (Structured Information Cards) ~60%
+                            Expanded(
+                              flex: 6,
+                              child: _buildInformationColumn(
+                                context,
+                                selectedCategory,
+                                categoryList,
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+
+                      // Stacked Single Column on Tablet / Mobile
+                      return Column(
+                        children: [
+                          _buildGalleryColumn(context),
+                          const SizedBox(height: 24),
+                          _buildInformationColumn(
+                            context,
+                            selectedCategory,
+                            categoryList,
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                  child: _saving
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(isEditing ? 'Save changes' : 'Create product'),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _textField(
+  // ---------------------------------------------------------------------------
+  // Left Column — Product Image Gallery (Wolfpixel Inspired)
+  // ---------------------------------------------------------------------------
+  Widget _buildGalleryColumn(BuildContext context) {
+    final hasImages = _images.isNotEmpty;
+    final safePreviewIndex =
+        hasImages ? _selectedPreviewIndex.clamp(0, _images.length - 1) : 0;
+    final currentImage = hasImages ? _images[safePreviewIndex] : null;
+    final isPrimarySelected =
+        hasImages && safePreviewIndex == _primaryImageIndex;
+
+    return AdminCard(
+      title: 'Product Gallery',
+      subtitle: 'Primary visual presentation and boutique catalogue assets',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Large Primary Image Preview
+          Container(
+            width: double.infinity,
+            height: 380,
+            decoration: BoxDecoration(
+              color: AdminColors.surfaceSubtle,
+              borderRadius: AdminRadii.radiusSm,
+              border: Border.all(color: AdminColors.lineSubtle),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (currentImage != null)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Center(
+                      child: currentImage.savedImage != null
+                          ? ProductImage(
+                              url: currentImage.savedImage!.url,
+                              fit: BoxFit.contain,
+                            )
+                          : Image.memory(
+                              currentImage.bytes!,
+                              fit: BoxFit.contain,
+                            ),
+                    ),
+                  )
+                else if (_imageUrl.text.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Center(
+                      child: ProductImage(
+                        url: _imageUrl.text.trim(),
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  )
+                else
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 64,
+                            height: 64,
+                            decoration: const BoxDecoration(
+                              color: AdminColors.white,
+                              shape: BoxShape.circle,
+                              border: Border.fromBorderSide(
+                                AdminBorders.sideSubtle,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.add_photo_alternate_outlined,
+                              size: 28,
+                              color: AdminColors.charcoal,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'No product imagery added',
+                            style: AdminTypography.bodyBold,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Upload photography (JPG, PNG, WebP up to 5 MB) or specify an external image source.',
+                            textAlign: TextAlign.center,
+                            style: AdminTypography.caption.copyWith(
+                              color: AdminColors.muted,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          AdminButton.secondary(
+                            size: AdminButtonSize.sm,
+                            label: 'Select Images',
+                            icon: const Icon(
+                              Icons.upload_file_outlined,
+                              size: 14,
+                            ),
+                            onPressed: _uploadingImageIndex == null
+                                ? _pickImages
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // Primary / Gallery status indicator overlay
+                if (hasImages)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: AdminBadge(
+                      label: isPrimarySelected ? 'Primary Image' : 'Gallery Item',
+                      variant: isPrimarySelected
+                          ? AdminBadgeVariant.success
+                          : AdminBadgeVariant.neutral,
+                      showDot: true,
+                    ),
+                  ),
+
+                // Action to make current preview primary
+                if (hasImages && !isPrimarySelected)
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: AdminButton.secondary(
+                      size: AdminButtonSize.sm,
+                      label: 'Set as Primary',
+                      icon: const Icon(Icons.star_outline, size: 14),
+                      onPressed: () => setState(() {
+                        _primaryImageIndex = safePreviewIndex;
+                      }),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 2. Thumbnail Strip Underneath
+          if (hasImages) ...[
+            Text('GALLERY THUMBNAILS', style: AdminTypography.tableHeader),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (var i = 0; i < _images.length; i++)
+                  _buildThumbnailItem(i, i == safePreviewIndex),
+              ],
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // Upload progress bar when busy
+          if (_uploadingImageIndex != null) ...[
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: _images.isEmpty
+                  ? null
+                  : (_uploadingImageIndex! + 1) / _images.length,
+              color: AdminColors.charcoal,
+              backgroundColor: AdminColors.surfaceSubtle,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Uploading image ${_uploadingImageIndex! + 1} of ${_images.length}…',
+              style: AdminTypography.caption,
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // 3. Image Actions (Upload & Reorder / Delete)
+          const Divider(height: 1, thickness: 1, color: AdminColors.line),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              AdminButton.secondary(
+                key: const ValueKey('pick-product-images'),
+                label: 'Upload Images',
+                icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+                onPressed: _uploadingImageIndex == null ? _pickImages : null,
+              ),
+              if (hasImages)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Move Left',
+                      icon: const Icon(Icons.chevron_left),
+                      onPressed: safePreviewIndex > 0
+                          ? () => _moveImage(safePreviewIndex, safePreviewIndex - 1)
+                          : null,
+                    ),
+                    IconButton(
+                      tooltip: 'Move Right',
+                      icon: const Icon(Icons.chevron_right),
+                      onPressed: safePreviewIndex < _images.length - 1
+                          ? () => _moveImage(safePreviewIndex, safePreviewIndex + 1)
+                          : null,
+                    ),
+                    IconButton(
+                      tooltip: 'Remove selected image',
+                      icon: const Icon(Icons.delete_outline,
+                          color: AdminColors.error),
+                      onPressed: _uploadingImageIndex == null
+                          ? () => _removeImage(safePreviewIndex)
+                          : null,
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Accepted formats: JPG, PNG, WebP up to 5 MB per image.',
+            style: AdminTypography.caption.copyWith(color: AdminColors.muted),
+          ),
+          if (widget.productId == null) ...[
+            const SizedBox(height: 14),
+            const Divider(height: 1, thickness: 1, color: AdminColors.line),
+            const SizedBox(height: 14),
+            _refinedTextField(
+              _imageUrl,
+              'External Image URL',
+              key: 'product-image-url',
+              placeholder: 'https://...',
+              keyboardType: TextInputType.url,
+              helperText:
+                  'Direct image URL (optional when uploading to gallery)',
+              validator: (value) {
+                if (_images.isNotEmpty && (value ?? '').trim().isEmpty) {
+                  return null;
+                }
+                final uri = Uri.tryParse((value ?? '').trim());
+                if (uri == null ||
+                    !{'http', 'https'}.contains(uri.scheme) ||
+                    uri.host.isEmpty) {
+                  return 'Enter a valid http or https image URL.';
+                }
+                return null;
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThumbnailItem(int index, bool isSelected) {
+    final item = _images[index];
+    final isPrimary = index == _primaryImageIndex;
+
+    return GestureDetector(
+      key: ValueKey('gallery-thumbnail-$index'),
+      onTap: () => setState(() => _selectedPreviewIndex = index),
+      child: AnimatedContainer(
+        duration: AdminMotion.duration(context, AdminMotion.hover),
+        curve: AdminMotion.curveFast,
+        width: 68,
+        height: 68,
+        decoration: BoxDecoration(
+          color: AdminColors.surfaceSubtle,
+          borderRadius: AdminRadii.radiusXs,
+          border: Border.all(
+            color: isSelected ? AdminColors.charcoal : AdminColors.line,
+            width: isSelected ? 2.0 : 1.0,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(4),
+              child: item.savedImage != null
+                  ? ProductImage(
+                      url: item.savedImage!.url,
+                      fit: BoxFit.contain,
+                    )
+                  : Image.memory(item.bytes!, fit: BoxFit.contain),
+            ),
+            if (isPrimary)
+              Positioned(
+                top: 3,
+                left: 3,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: AdminColors.charcoal,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.star,
+                    size: 9,
+                    color: AdminColors.white,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Right Column — Structured Product Information
+  // ---------------------------------------------------------------------------
+  Widget _buildInformationColumn(
+    BuildContext context,
+    String? selectedCategory,
+    List<ProductCategory> categoryList,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Section 1: Basic Information
+        AdminCard(
+          title: 'Basic Information',
+          subtitle: 'Product identification, title and category',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _refinedTextField(
+                _name,
+                'Product Name',
+                key: 'product-name',
+                placeholder: 'e.g. Oxford Cotton Shirt',
+              ),
+              const SizedBox(height: 16),
+              _refinedTextField(
+                _sku,
+                'Product SKU',
+                key: 'product-sku',
+                placeholder: 'e.g. NOR-OFC-01',
+              ),
+              const SizedBox(height: 16),
+              _refinedTextField(
+                _description,
+                'Description',
+                key: 'product-description',
+                maxLines: 4,
+                placeholder:
+                    'Detailed product narrative, craftsmanship and styling notes...',
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                key: ValueKey('product-category-$selectedCategory'),
+                initialValue: selectedCategory,
+                style: AdminTypography.body,
+                decoration: InputDecoration(
+                  labelText: 'Category',
+                  labelStyle:
+                      AdminTypography.caption.copyWith(color: AdminColors.muted),
+                  border: const OutlineInputBorder(
+                    borderSide: AdminBorders.sideSubtle,
+                    borderRadius: AdminRadii.radiusSm,
+                  ),
+                  enabledBorder: const OutlineInputBorder(
+                    borderSide: AdminBorders.sideSubtle,
+                    borderRadius: AdminRadii.radiusSm,
+                  ),
+                  focusedBorder: const OutlineInputBorder(
+                    borderSide: AdminBorders.sideActive,
+                    borderRadius: AdminRadii.radiusSm,
+                  ),
+                  filled: true,
+                  fillColor: AdminColors.surfaceSubtle,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+                dropdownColor: AdminColors.white,
+                borderRadius: AdminRadii.radiusSm,
+                items: categoryList
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item.name,
+                        child: Text(item.name, style: AdminTypography.body),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) _category.text = value;
+                },
+                validator: (value) => value == null || value.isEmpty
+                    ? 'Create or select a category.'
+                    : null,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Section 2: Pricing & Valuation
+        AdminCard(
+          title: 'Pricing & Valuation',
+          subtitle: 'Commercial selling price and regular retail reference',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _refinedTextField(
+                      _price,
+                      'Selling Price (INR)',
+                      key: 'product-price',
+                      prefixText: '₹ ',
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        final price = int.tryParse(value ?? '');
+                        if (price == null || price <= 0) {
+                          return 'Enter a price greater than zero.';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _refinedTextField(
+                      _salePrice,
+                      'Regular Price (optional)',
+                      key: 'product-sale-price',
+                      prefixText: '₹ ',
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return null;
+                        final regular = int.tryParse(value);
+                        final sale = int.tryParse(_price.text);
+                        if (regular == null || sale == null || regular <= sale) {
+                          return 'Must be greater than selling price.';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Section 3: External Image Source
+        AdminCard(
+          title: 'External Image Source',
+          subtitle: 'Fallback image URL (optional when uploading to gallery)',
+          child: _refinedTextField(
+            _imageUrl,
+            'External Image URL',
+            key: 'product-image-url',
+            placeholder: 'https://...',
+            keyboardType: TextInputType.url,
+            validator: (value) {
+              if (_images.isNotEmpty && (value ?? '').trim().isEmpty) {
+                return null;
+              }
+              final uri = Uri.tryParse((value ?? '').trim());
+              if (uri == null ||
+                  !{'http', 'https'}.contains(uri.scheme) ||
+                  uri.host.isEmpty) {
+                return 'Enter a valid http or https image URL.';
+              }
+              return null;
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Section 4: Variants & Options
+        AdminCard(
+          title: 'Variants & Sizing Options',
+          subtitle: 'Configure size availability and boutique colourways',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile.adaptive(
+                key: const ValueKey('product-requires-size'),
+                contentPadding: EdgeInsets.zero,
+                activeTrackColor: AdminColors.charcoal,
+                title: const Text(
+                  'Customer selects a size',
+                  style: AdminTypography.bodyMedium,
+                ),
+                subtitle: const Text(
+                  'Enable garment sizing options (e.g. S, M, L, XL)',
+                  style: AdminTypography.caption,
+                ),
+                value: _requiresSize,
+                onChanged: (value) => setState(() => _requiresSize = value),
+              ),
+              if (_requiresSize) ...[
+                const SizedBox(height: 10),
+                _refinedTextField(
+                  _sizes,
+                  'Available Sizes',
+                  key: 'product-sizes',
+                  helperText: 'Separate values with commas (e.g. S, M, L, XL)',
+                ),
+              ],
+              const SizedBox(height: 12),
+              const Divider(height: 1, thickness: 1, color: AdminColors.line),
+              const SizedBox(height: 12),
+              SwitchListTile.adaptive(
+                key: const ValueKey('product-requires-color'),
+                contentPadding: EdgeInsets.zero,
+                activeTrackColor: AdminColors.charcoal,
+                title: const Text(
+                  'Customer selects a colour',
+                  style: AdminTypography.bodyMedium,
+                ),
+                subtitle: const Text(
+                  'Enable fabric or leather colourway choices',
+                  style: AdminTypography.caption,
+                ),
+                value: _requiresColor,
+                onChanged: (value) => setState(() => _requiresColor = value),
+              ),
+              if (_requiresColor) ...[
+                const SizedBox(height: 10),
+                _refinedTextField(
+                  _colors,
+                  'Available Colours',
+                  key: 'product-colors',
+                  helperText:
+                      'Separate colour names with commas (e.g. Chalk, Charcoal, Olive)',
+                ),
+              ],
+              if (_existingProduct?.variants.isNotEmpty == true) ...[
+                const SizedBox(height: 16),
+                const Divider(height: 1, thickness: 1, color: AdminColors.line),
+                const SizedBox(height: 14),
+                Text(
+                  'VARIANT SKU & PRICE OVERRIDES',
+                  style: AdminTypography.tableHeader,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Customize SKU codes or set individual variant price points',
+                  style: AdminTypography.caption,
+                ),
+                const SizedBox(height: 14),
+                for (final variant in _existingProduct!.variants)
+                  _refinedVariantEditor(context, variant),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Section 5: Inventory & Availability
+        AdminCard(
+          title: 'Inventory & Stock Level',
+          subtitle: 'Catalogue distribution across active variants',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: const BoxDecoration(
+                  color: AdminColors.surfaceSubtle,
+                  borderRadius: AdminRadii.radiusSm,
+                  border: Border.fromBorderSide(AdminBorders.sideSubtle),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: AdminColors.white,
+                        shape: BoxShape.circle,
+                        border: Border.fromBorderSide(AdminBorders.sideSubtle),
+                      ),
+                      child: const Icon(
+                        Icons.inventory_2_outlined,
+                        size: 20,
+                        color: AdminColors.charcoal,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${_existingProduct?.stockQuantity ?? 0} Total Units in Stock',
+                            style: AdminTypography.bodyBold,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Distributed across ${_existingProduct?.variants.length ?? 0} active variants. Stock adjustments are managed in Admin → Inventory.',
+                            style: AdminTypography.caption,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    AdminButton.secondary(
+                      size: AdminButtonSize.sm,
+                      label: 'Manage Stock',
+                      icon: const Icon(Icons.stacked_bar_chart_outlined, size: 14),
+                      onPressed: () => context.go('/admin/inventory'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Section 6: Catalogue Visibility
+        AdminCard(
+          title: 'Storefront Visibility',
+          subtitle: 'Control whether this item is active in the customer shop',
+          child: SwitchListTile.adaptive(
+            key: const ValueKey('product-active'),
+            contentPadding: EdgeInsets.zero,
+            activeTrackColor: AdminColors.success,
+            title: const Text(
+              'Active in customer catalogue',
+              style: AdminTypography.bodyMedium,
+            ),
+            subtitle: const Text(
+              'When active, customers can discover and purchase this item in the boutique storefront.',
+              style: AdminTypography.caption,
+            ),
+            value: _isActive,
+            onChanged: (value) => setState(() => _isActive = value),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Section 7: Bottom Save & Cancel Action Bar
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            AdminButton.secondary(
+              label: 'Cancel',
+              onPressed: () => context.go('/admin/products'),
+            ),
+            AdminButton.primary(
+              key: const ValueKey('save-product-footer'),
+              label: 'Save Changes',
+              icon: const Icon(Icons.check, size: 16),
+              isLoading: _saving,
+              onPressed: _saving ? null : _save,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _refinedTextField(
     TextEditingController controller,
     String label, {
     required String key,
@@ -335,146 +971,697 @@ class _AdminProductFormScreenState
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
     String? helperText,
+    String? prefixText,
+    String? placeholder,
     String? Function(String?)? validator,
-  }) => Padding(
-    padding: const EdgeInsets.only(bottom: 13),
-    child: TextFormField(
-      key: ValueKey(key),
-      controller: controller,
-      maxLines: maxLines,
-      keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
-      validator:
-          validator ??
-          (value) => (value == null || value.trim().isEmpty)
-              ? 'This field is required.'
-              : null,
-      decoration: InputDecoration(
-        labelText: label,
-        helperText: helperText,
-        border: const OutlineInputBorder(),
-        alignLabelWithHint: maxLines > 1,
-      ),
-    ),
-  );
+  }) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 0),
+        child: TextFormField(
+          key: ValueKey(key),
+          controller: controller,
+          maxLines: maxLines,
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          style: AdminTypography.body,
+          cursorColor: AdminColors.charcoal,
+          validator: validator ??
+              (value) => (value == null || value.trim().isEmpty)
+                  ? 'This field is required.'
+                  : null,
+          decoration: InputDecoration(
+            labelText: label,
+            labelStyle:
+                AdminTypography.caption.copyWith(color: AdminColors.muted),
+            hintText: placeholder,
+            hintStyle:
+                AdminTypography.caption.copyWith(color: AdminColors.neutralGrey),
+            helperText: helperText,
+            helperStyle:
+                AdminTypography.caption.copyWith(color: AdminColors.neutralGrey),
+            prefixText: prefixText,
+            prefixStyle: AdminTypography.bodyBold,
+            filled: true,
+            fillColor: AdminColors.surfaceSubtle,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: const OutlineInputBorder(
+              borderSide: AdminBorders.sideSubtle,
+              borderRadius: AdminRadii.radiusSm,
+            ),
+            enabledBorder: const OutlineInputBorder(
+              borderSide: AdminBorders.sideSubtle,
+              borderRadius: AdminRadii.radiusSm,
+            ),
+            focusedBorder: const OutlineInputBorder(
+              borderSide: AdminBorders.sideActive,
+              borderRadius: AdminRadii.radiusSm,
+            ),
+            errorBorder: const OutlineInputBorder(
+              borderSide: BorderSide(color: AdminColors.error),
+              borderRadius: AdminRadii.radiusSm,
+            ),
+            focusedErrorBorder: const OutlineInputBorder(
+              borderSide: BorderSide(color: AdminColors.error, width: 1.5),
+              borderRadius: AdminRadii.radiusSm,
+            ),
+            alignLabelWithHint: maxLines > 1,
+          ),
+        ),
+      );
 
-  Widget _buildImageManager(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 18),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Product images', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 4),
-        Text(
-          'Select a primary image and drag to reorder the gallery. JPG, PNG or WebP up to 5 MB each.',
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: NorveColors.muted),
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          key: const ValueKey('pick-product-images'),
-          onPressed: _uploadingImageIndex == null ? _pickImages : null,
-          icon: const Icon(Icons.add_photo_alternate_outlined),
-          label: const Text('Add images'),
-        ),
-        if (_uploadingImageIndex != null) ...[
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: _images.isEmpty
-                ? null
-                : (_uploadingImageIndex! + 1) / _images.length,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Uploading image ${_uploadingImageIndex! + 1} of ${_images.length}…',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-        if (_images.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Text('Add at least one image.'),
-          )
-        else
-          ReorderableListView.builder(
-            key: const ValueKey('product-image-order'),
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _images.length,
-            onReorderItem: (oldIndex, newIndex) => setState(() {
-              final image = _images.removeAt(oldIndex);
-              _images.insert(newIndex, image);
-              if (_primaryImageIndex == oldIndex) {
-                _primaryImageIndex = newIndex;
-              } else if (oldIndex < _primaryImageIndex &&
-                  newIndex >= _primaryImageIndex) {
-                _primaryImageIndex--;
-              } else if (oldIndex > _primaryImageIndex &&
-                  newIndex <= _primaryImageIndex) {
-                _primaryImageIndex++;
-              }
-            }),
-            itemBuilder: (context, index) {
-              final item = _images[index];
-              return ListTile(
-                key: ValueKey('product-image-$index-${item.label}'),
-                contentPadding: EdgeInsets.zero,
-                leading: SizedBox(
-                  width: 48,
-                  height: 54,
-                  child: item.savedImage != null
-                      ? ProductImage(url: item.savedImage!.url)
-                      : Image.memory(item.bytes!, fit: BoxFit.cover),
+  Widget _refinedVariantEditor(BuildContext context, ProductVariant variant) {
+    final key = variant.id ?? '${variant.size}|${variant.colorName}';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: const BoxDecoration(
+        color: AdminColors.surfaceSubtle,
+        borderRadius: AdminRadii.radiusSm,
+        border: Border.fromBorderSide(AdminBorders.sideSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: Color(variant.colorValue | 0xFF000000),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AdminColors.line),
                 ),
-                title: Text(
-                  item.label,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${variant.size} · ${variant.colorName}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: AdminTypography.label.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AdminColors.charcoal,
+                  ),
                 ),
-                subtitle: Text(
-                  index == _primaryImageIndex
-                      ? 'Primary image'
-                      : 'Gallery image',
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${variant.stockQuantity} in stock',
+                style: AdminTypography.caption,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  key: ValueKey('variant-sku-$key'),
+                  initialValue: _variantSkus[key] ?? variant.sku,
+                  style: AdminTypography.body,
+                  decoration: const InputDecoration(
+                    labelText: 'Variant SKU',
+                    isDense: true,
+                    filled: true,
+                    fillColor: AdminColors.white,
+                    border: OutlineInputBorder(
+                      borderSide: AdminBorders.sideSubtle,
+                      borderRadius: AdminRadii.radiusSm,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: AdminBorders.sideSubtle,
+                      borderRadius: AdminRadii.radiusSm,
+                    ),
+                  ),
+                  onChanged: (value) => _variantSkus[key] = value,
                 ),
-                trailing: Wrap(
-                  children: [
-                    IconButton(
-                      tooltip: index == _primaryImageIndex
-                          ? 'Primary image'
-                          : 'Set as primary image',
-                      onPressed: () =>
-                          setState(() => _primaryImageIndex = index),
-                      icon: Icon(
-                        index == _primaryImageIndex
-                            ? Icons.star
-                            : Icons.star_border,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  key: ValueKey('variant-price-$key'),
+                  initialValue: _variantPriceOverrides[key] ??
+                      variant.priceOverride?.toString() ??
+                      '',
+                  style: AdminTypography.body,
+                  decoration: const InputDecoration(
+                    labelText: 'Price Override (optional)',
+                    prefixText: '₹ ',
+                    isDense: true,
+                    filled: true,
+                    fillColor: AdminColors.white,
+                    border: OutlineInputBorder(
+                      borderSide: AdminBorders.sideSubtle,
+                      borderRadius: AdminRadii.radiusSm,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: AdminBorders.sideSubtle,
+                      borderRadius: AdminRadii.radiusSm,
+                    ),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (value) => _variantPriceOverrides[key] = value,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _removeImage(int index) {
+    if (index < 0 || index >= _images.length) return;
+    setState(() {
+      _images.removeAt(index);
+      if (_images.isEmpty) {
+        _primaryImageIndex = 0;
+        _selectedPreviewIndex = 0;
+      } else {
+        if (_primaryImageIndex >= _images.length) {
+          _primaryImageIndex = _images.length - 1;
+        } else if (index < _primaryImageIndex) {
+          _primaryImageIndex--;
+        }
+        if (_selectedPreviewIndex >= _images.length) {
+          _selectedPreviewIndex = _images.length - 1;
+        } else if (index < _selectedPreviewIndex) {
+          _selectedPreviewIndex--;
+        }
+      }
+    });
+  }
+
+  void _moveImage(int oldIndex, int newIndex) {
+    if (newIndex < 0 || newIndex >= _images.length || oldIndex == newIndex) {
+      return;
+    }
+    setState(() {
+      final image = _images.removeAt(oldIndex);
+      _images.insert(newIndex, image);
+      if (_primaryImageIndex == oldIndex) {
+        _primaryImageIndex = newIndex;
+      } else if (oldIndex < _primaryImageIndex &&
+          newIndex >= _primaryImageIndex) {
+        _primaryImageIndex--;
+      } else if (oldIndex > _primaryImageIndex &&
+          newIndex <= _primaryImageIndex) {
+        _primaryImageIndex++;
+      }
+      _selectedPreviewIndex = newIndex;
+    });
+  }
+
+  // ===========================================================================
+  // REDESIGNED ADD PRODUCT LAYOUT (Wolfpixel Two-Column Architecture)
+  // ===========================================================================
+  Widget _buildCreateLayout(
+    BuildContext context,
+    String? selectedCategory,
+    List<ProductCategory> categoryList,
+  ) {
+    return Scaffold(
+      backgroundColor: AdminColors.ivory,
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: CustomScrollView(
+            key: const ValueKey('product-form-scroll'),
+            slivers: [
+              const SliverToBoxAdapter(child: CatalogStateNotice()),
+              SliverToBoxAdapter(
+                child: AdminPageHeader(
+                  breadcrumbs: InkWell(
+                    onTap: () => context.go('/admin/products'),
+                    borderRadius: AdminRadii.radiusXs,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 4,
+                        horizontal: 2,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(
+                            Icons.arrow_back,
+                            size: 14,
+                            color: AdminColors.muted,
+                          ),
+                          SizedBox(width: 6),
+                          Text('Products', style: AdminTypography.caption),
+                        ],
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Remove image',
-                      onPressed: _uploadingImageIndex == null
-                          ? () => setState(() {
-                              _images.removeAt(index);
-                              if (_images.isEmpty) {
-                                _primaryImageIndex = 0;
-                              } else if (_primaryImageIndex >= _images.length) {
-                                _primaryImageIndex = _images.length - 1;
-                              } else if (index < _primaryImageIndex) {
-                                _primaryImageIndex--;
-                              }
-                            })
-                          : null,
-                      icon: const Icon(Icons.delete_outline),
+                  ),
+                  title: 'Add New Product',
+                  subtitle:
+                      'Introduce a new piece into the boutique catalogue.',
+                  actions: [
+                    AdminButton.secondary(
+                      label: 'Cancel',
+                      onPressed: () => context.go('/admin/products'),
+                    ),
+                    AdminButton.primary(
+                      key: const ValueKey('save-product'),
+                      label: 'Create Product',
+                      icon: const Icon(Icons.add, size: 16),
+                      isLoading: _saving,
+                      onPressed: _saving ? null : _save,
                     ),
                   ],
                 ),
-              );
-            },
-          ),
-      ],
-    ),
-  );
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isDesktop = constraints.maxWidth >= 960;
+                      if (isDesktop) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Left Column (Gallery) ~40%
+                            Expanded(
+                              flex: 4,
+                              child: _buildGalleryColumn(context),
+                            ),
+                            const SizedBox(width: 24),
+                            // Right Column (Structured Information Cards) ~60%
+                            Expanded(
+                              flex: 6,
+                              child: _buildCreateInformationColumn(
+                                context,
+                                selectedCategory,
+                                categoryList,
+                              ),
+                            ),
+                          ],
+                        );
+                      }
 
+                      // Stacked Single Column on Tablet / Mobile
+                      return Column(
+                        children: [
+                          _buildGalleryColumn(context),
+                          const SizedBox(height: 24),
+                          _buildCreateInformationColumn(
+                            context,
+                            selectedCategory,
+                            categoryList,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Right Column — Add Product Structured Information
+  // ---------------------------------------------------------------------------
+  Widget _buildCreateInformationColumn(
+    BuildContext context,
+    String? selectedCategory,
+    List<ProductCategory> categoryList,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Section 1: Basic Information
+        AdminCard(
+          title: 'Basic Information',
+          subtitle: 'Product identification, title and category',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _refinedTextField(
+                _name,
+                'Product Name',
+                key: 'product-name',
+                placeholder: 'e.g. Oxford Cotton Shirt',
+              ),
+              const SizedBox(height: 16),
+              _refinedTextField(
+                _sku,
+                'Product SKU',
+                key: 'product-sku',
+                placeholder: 'e.g. NOR-OFC-01',
+              ),
+              const SizedBox(height: 16),
+              _refinedTextField(
+                _description,
+                'Description',
+                key: 'product-description',
+                maxLines: 4,
+                placeholder:
+                    'Detailed product narrative, craftsmanship and styling notes...',
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                key: ValueKey('product-category-$selectedCategory'),
+                initialValue: selectedCategory,
+                style: AdminTypography.body,
+                decoration: InputDecoration(
+                  labelText: 'Category',
+                  labelStyle:
+                      AdminTypography.caption.copyWith(color: AdminColors.muted),
+                  border: const OutlineInputBorder(
+                    borderSide: AdminBorders.sideSubtle,
+                    borderRadius: AdminRadii.radiusSm,
+                  ),
+                  enabledBorder: const OutlineInputBorder(
+                    borderSide: AdminBorders.sideSubtle,
+                    borderRadius: AdminRadii.radiusSm,
+                  ),
+                  focusedBorder: const OutlineInputBorder(
+                    borderSide: AdminBorders.sideActive,
+                    borderRadius: AdminRadii.radiusSm,
+                  ),
+                  filled: true,
+                  fillColor: AdminColors.surfaceSubtle,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+                dropdownColor: AdminColors.white,
+                borderRadius: AdminRadii.radiusSm,
+                items: categoryList
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item.name,
+                        child: Text(item.name, style: AdminTypography.body),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) _category.text = value;
+                },
+                validator: (value) => value == null || value.isEmpty
+                    ? 'Create or select a category.'
+                    : null,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Section 2: Pricing & Valuation
+        AdminCard(
+          title: 'Pricing & Valuation',
+          subtitle: 'Commercial selling price and regular retail reference',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _refinedTextField(
+                      _price,
+                      'Selling Price (INR)',
+                      key: 'product-price',
+                      prefixText: '₹ ',
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        final price = int.tryParse(value ?? '');
+                        if (price == null || price <= 0) {
+                          return 'Enter a price greater than zero.';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _refinedTextField(
+                      _salePrice,
+                      'Regular Price (optional)',
+                      key: 'product-sale-price',
+                      prefixText: '₹ ',
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return null;
+                        final regular = int.tryParse(value);
+                        final sale = int.tryParse(_price.text);
+                        if (regular == null || sale == null || regular <= sale) {
+                          return 'Must be greater than selling price.';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              Builder(
+                builder: (context) {
+                  final regular = int.tryParse(_salePrice.text);
+                  final sale = int.tryParse(_price.text);
+                  if (regular != null && sale != null && regular > sale) {
+                    final discount =
+                        (((regular - sale) / regular) * 100).round();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: const BoxDecoration(
+                          color: AdminColors.surfaceSubtle,
+                          borderRadius: AdminRadii.radiusSm,
+                          border: Border.fromBorderSide(AdminBorders.sideSubtle),
+                        ),
+                        child: Row(
+                          children: [
+                            AdminBadge(
+                              label: '$discount% OFF',
+                              variant: AdminBadgeVariant.success,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Customers save ₹${regular - sale} on this product.',
+                              style: AdminTypography.caption.copyWith(
+                                color: AdminColors.charcoal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Section 3: Variants & Sizing Options
+        AdminCard(
+          title: 'Variants & Sizing Options',
+          subtitle: 'Define size and colourway variations for customers',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile.adaptive(
+                key: const ValueKey('product-requires-size'),
+                contentPadding: EdgeInsets.zero,
+                activeTrackColor: AdminColors.charcoal,
+                title: const Text(
+                  'Customer selects a size',
+                  style: AdminTypography.bodyMedium,
+                ),
+                subtitle: const Text(
+                  'Enable multiple sizing options (e.g. S, M, L, XL)',
+                  style: AdminTypography.caption,
+                ),
+                value: _requiresSize,
+                onChanged: (value) => setState(() => _requiresSize = value),
+              ),
+              if (_requiresSize) ...[
+                const SizedBox(height: 8),
+                _refinedTextField(
+                  _sizes,
+                  'Available Sizes',
+                  key: 'product-sizes',
+                  helperText:
+                      'Separate size values with commas (e.g. S, M, L, XL)',
+                ),
+                const SizedBox(height: 12),
+              ],
+              const Divider(height: 1, thickness: 1, color: AdminColors.line),
+              const SizedBox(height: 8),
+              SwitchListTile.adaptive(
+                key: const ValueKey('product-requires-color'),
+                contentPadding: EdgeInsets.zero,
+                activeTrackColor: AdminColors.charcoal,
+                title: const Text(
+                  'Customer selects a colour',
+                  style: AdminTypography.bodyMedium,
+                ),
+                subtitle: const Text(
+                  'Enable boutique colour selection for this item',
+                  style: AdminTypography.caption,
+                ),
+                value: _requiresColor,
+                onChanged: (value) => setState(() => _requiresColor = value),
+              ),
+              if (_requiresColor) ...[
+                const SizedBox(height: 8),
+                _refinedTextField(
+                  _colors,
+                  'Available Colours',
+                  key: 'product-colors',
+                  helperText:
+                      'Separate colour names with commas (e.g. Chalk, Charcoal, Olive)',
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Section 4: Inventory & Stock Level
+        AdminCard(
+          title: 'Inventory & Stock Level',
+          subtitle:
+              'Set initial boutique stock to be distributed across variants',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _refinedTextField(
+                _stock,
+                'Total Stock Across Variants',
+                key: 'product-stock',
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                helperText:
+                    'Total inventory units allocated to this product upon creation',
+                validator: (value) {
+                  final stock = int.tryParse(value ?? '');
+                  return stock == null || stock < 0
+                      ? 'Stock must be zero or more.'
+                      : null;
+                },
+              ),
+              const SizedBox(height: 14),
+              Builder(
+                builder: (context) {
+                  final sizes = _sizes.text
+                      .split(',')
+                      .map((v) => v.trim())
+                      .where((v) => v.isNotEmpty)
+                      .toList();
+                  final colors = _colors.text
+                      .split(',')
+                      .map((v) => v.trim())
+                      .where((v) => v.isNotEmpty)
+                      .toList();
+                  final sizeCount =
+                      _requiresSize ? (sizes.isEmpty ? 1 : sizes.length) : 1;
+                  final colorCount =
+                      _requiresColor ? (colors.isEmpty ? 1 : colors.length) : 1;
+                  final totalCombinations = sizeCount * colorCount;
+                  final currentStock = int.tryParse(_stock.text) ?? 0;
+                  final perVariant = totalCombinations > 0
+                      ? currentStock ~/ totalCombinations
+                      : 0;
+
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: AdminColors.surfaceSubtle,
+                      borderRadius: AdminRadii.radiusSm,
+                      border: Border.fromBorderSide(AdminBorders.sideSubtle),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.inventory_2_outlined,
+                          size: 16,
+                          color: AdminColors.charcoal,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Will initialize $totalCombinations variant combination${totalCombinations == 1 ? '' : 's'} (~$perVariant units each). Individual SKU overrides and price adjustments can be tailored in Edit Product after creation.',
+                            style: AdminTypography.caption.copyWith(
+                              color: AdminColors.charcoal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Section 5: Catalogue Visibility
+        AdminCard(
+          title: 'Storefront Visibility',
+          subtitle: 'Control whether this item is active in the customer shop',
+          child: SwitchListTile.adaptive(
+            key: const ValueKey('product-active'),
+            contentPadding: EdgeInsets.zero,
+            activeTrackColor: AdminColors.success,
+            title: const Text(
+              'Active in customer catalogue',
+              style: AdminTypography.bodyMedium,
+            ),
+            subtitle: const Text(
+              'When active, customers can discover and purchase this item in the boutique storefront.',
+              style: AdminTypography.caption,
+            ),
+            value: _isActive,
+            onChanged: (value) => setState(() => _isActive = value),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Section 6: Bottom Save & Cancel Action Bar
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            AdminButton.secondary(
+              label: 'Cancel',
+              onPressed: () => context.go('/admin/products'),
+            ),
+            AdminButton.primary(
+              key: const ValueKey('save-product-footer'),
+              label: 'Create Product',
+              icon: const Icon(Icons.add, size: 16),
+              isLoading: _saving,
+              onPressed: _saving ? null : _save,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ===========================================================================
+  // BACKEND / PERSISTENCE / FILE PICKING
+  // ===========================================================================
   Future<void> _pickImages() async {
     try {
       final files = await FilePicker.pickFiles(
@@ -509,7 +1696,10 @@ class _AdminProductFormScreenState
       }
       if (additions.isNotEmpty) {
         setState(() {
-          if (_images.isEmpty) _primaryImageIndex = 0;
+          if (_images.isEmpty) {
+            _primaryImageIndex = 0;
+            _selectedPreviewIndex = 0;
+          }
           _images.addAll(additions);
         });
       }
@@ -523,6 +1713,7 @@ class _AdminProductFormScreenState
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     if (!_formKey.currentState!.validate()) return;
     final name = _name.text.trim();
     final sizes = _sizes.text
@@ -558,7 +1749,7 @@ class _AdminProductFormScreenState
     final category = _category.text.trim().isNotEmpty
         ? _category.text.trim()
         : ref.read(productCategoriesProvider).asData?.value.firstOrNull?.name ??
-              '';
+            '';
     final optionsSizes = _requiresSize ? sizes : ['One Size'];
     final optionsColors = _requiresColor
         ? colorNames.map(_productColor).toList()
@@ -687,7 +1878,13 @@ class _AdminProductFormScreenState
       await ref
           .read(productCatalogProvider.notifier)
           .save(product, create: existing == null);
-      if (mounted) context.pop();
+      if (mounted) {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/admin/products');
+        }
+      }
     } catch (error) {
       if (existing == null && savedImages.isNotEmpty) {
         final orphanedPaths = savedImages
@@ -714,52 +1911,6 @@ class _AdminProductFormScreenState
         });
       }
     }
-  }
-
-  Widget _variantEditor(BuildContext context, ProductVariant variant) {
-    final key = variant.id ?? '${variant.size}|${variant.colorName}';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${variant.size} · ${variant.colorName}',
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          const SizedBox(height: 7),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  key: ValueKey('variant-sku-$key'),
-                  initialValue: _variantSkus[key] ?? variant.sku,
-                  decoration: const InputDecoration(labelText: 'Variant SKU'),
-                  onChanged: (value) => _variantSkus[key] = value,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  key: ValueKey('variant-price-$key'),
-                  initialValue:
-                      _variantPriceOverrides[key] ??
-                      variant.priceOverride?.toString() ??
-                      '',
-                  decoration: const InputDecoration(
-                    labelText: 'Price override (optional)',
-                    prefixText: '₹ ',
-                  ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (value) => _variantPriceOverrides[key] = value,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
   ProductColor _productColor(String name) {

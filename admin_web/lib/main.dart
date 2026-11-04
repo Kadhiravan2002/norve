@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:norve/core/auth/auth_providers.dart';
 import 'package:norve/core/supabase/supabase_config.dart';
 import 'package:norve/core/supabase/supabase_providers.dart';
+import 'package:norve/core/theme/norve_admin_tokens.dart';
 import 'package:norve/core/theme/norve_theme.dart';
 import 'package:norve/features/admin/admin_categories_screen.dart';
 import 'package:norve/features/admin/admin_dashboard_screen.dart';
@@ -47,6 +48,28 @@ Future<void> main() async {
   );
 }
 
+Page<dynamic> _buildFadeTransitionPage({
+  required BuildContext context,
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: AdminMotion.duration(context, AdminMotion.hover),
+    reverseTransitionDuration: AdminMotion.duration(context, AdminMotion.hover),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: AdminMotion.curveFast,
+        ),
+        child: child,
+      );
+    },
+  );
+}
+
 GoRouter createAdminWebRouter({String initialLocation = '/admin'}) => GoRouter(
   initialLocation: initialLocation,
   routes: [
@@ -70,39 +93,71 @@ GoRouter createAdminWebRouter({String initialLocation = '/admin'}) => GoRouter(
       routes: [
         GoRoute(
           path: '/admin',
-          builder: (context, state) => const AdminDashboardScreen(),
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            context: context,
+            state: state,
+            child: const AdminDashboardScreen(),
+          ),
         ),
         GoRoute(
           path: '/admin/products',
-          builder: (context, state) => const AdminProductsScreen(),
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            context: context,
+            state: state,
+            child: const AdminProductsScreen(),
+          ),
         ),
         GoRoute(
           path: '/admin/products/new',
-          builder: (context, state) => const AdminProductFormScreen(),
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            context: context,
+            state: state,
+            child: const AdminProductFormScreen(),
+          ),
         ),
         GoRoute(
           path: '/admin/products/:productId/edit',
-          builder: (context, state) => AdminProductFormScreen(
-            productId: state.pathParameters['productId'],
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            context: context,
+            state: state,
+            child: AdminProductFormScreen(
+              productId: state.pathParameters['productId'],
+            ),
           ),
         ),
         GoRoute(
           path: '/admin/orders',
-          builder: (context, state) => const AdminOrdersScreen(),
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            context: context,
+            state: state,
+            child: const AdminOrdersScreen(),
+          ),
         ),
         GoRoute(
           path: '/admin/orders/:orderId',
-          builder: (context, state) => AdminOrderDetailsScreen(
-            orderId: state.pathParameters['orderId']!,
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            context: context,
+            state: state,
+            child: AdminOrderDetailsScreen(
+              orderId: state.pathParameters['orderId']!,
+            ),
           ),
         ),
         GoRoute(
           path: '/admin/inventory',
-          builder: (context, state) => const AdminInventoryScreen(),
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            context: context,
+            state: state,
+            child: const AdminInventoryScreen(),
+          ),
         ),
         GoRoute(
           path: '/admin/categories',
-          builder: (context, state) => const AdminCategoriesScreen(),
+          pageBuilder: (context, state) => _buildFadeTransitionPage(
+            context: context,
+            state: state,
+            child: const AdminCategoriesScreen(),
+          ),
         ),
       ],
     ),

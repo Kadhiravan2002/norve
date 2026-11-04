@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/norve_theme.dart';
+import '../../core/theme/norve_admin_tokens.dart';
 
 const lowStockThreshold = 5;
 
+/// Luxury metric presentation card for the NORVÉ administration platform.
 class AdminMetricCard extends StatelessWidget {
   const AdminMetricCard({
     super.key,
@@ -18,36 +19,46 @@ class AdminMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: NorveColors.white,
-      border: Border.all(color: NorveColors.line),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: NorveColors.muted),
+        padding: const EdgeInsets.all(AdminSpacing.xl),
+        decoration: const BoxDecoration(
+          color: AdminColors.white,
+          border: AdminBorders.subtle,
+          borderRadius: AdminRadii.radiusSm,
         ),
-        const SizedBox(height: 12),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.titleLarge
-              ?.copyWith(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: AdminTypography.caption.copyWith(
+                color: AdminColors.muted,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: AdminSpacing.md),
+            Text(
+              value,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.5,
+                color: AdminColors.charcoal,
+              ),
+            ),
+            const SizedBox(height: AdminSpacing.xs),
+            Text(
+              caption,
+              style: AdminTypography.caption.copyWith(
+                color: AdminColors.neutralGrey,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          caption,
-          style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: NorveColors.muted),
-        ),
-      ],
-    ),
-  );
+      );
 }
 
+/// Refined status chip component preserved for backwards compatibility.
 class AdminStatusChip extends StatelessWidget {
   const AdminStatusChip({super.key, required this.label});
 
@@ -55,14 +66,18 @@ class AdminStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-    decoration: BoxDecoration(
-      color: NorveColors.white,
-      border: Border.all(color: NorveColors.line),
-    ),
-    child: Text(
-      label,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 10),
-    ),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: const BoxDecoration(
+          color: AdminColors.white,
+          border: AdminBorders.subtle,
+          borderRadius: AdminRadii.radiusXs,
+        ),
+        child: Text(
+          label,
+          style: AdminTypography.badge.copyWith(
+            fontSize: 10,
+            color: AdminColors.charcoal,
+          ),
+        ),
+      );
 }
