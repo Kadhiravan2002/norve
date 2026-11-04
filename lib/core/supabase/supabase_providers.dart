@@ -24,28 +24,61 @@ Future<bool> isVerifiedAdministrator(SupabaseClient client, User? user) async {
   return row != null;
 }
 
-Stream<bool> _administratorStream(SupabaseClient client) =>
-    Stream<bool>.multi((sink) {
-      var revision = 0;
-      void verify(User? user, int requestRevision) {
-        isVerifiedAdministrator(client, user).then((isAdmin) {
-          if (requestRevision == revision) sink.add(isAdmin);
-        }, onError: sink.addError);
+class AdminAccessNotifier extends AsyncNotifier<bool> {
+  StreamSubscription<AuthState>? _authSubscription;
+  int _revision = 0;
+  String? _verifiedUserId;
+
+  @override
+  Future<bool> build() async {
+    final client = ref.watch(supabaseClientProvider);
+    if (client == null) return false;
+
+    _authSubscription?.cancel();
+    _authSubscription = client.auth.onAuthStateChange.listen((data) {
+      final user = data.session?.user;
+      if (user?.id != _verifiedUserId) {
+        verifyUser(client, user);
       }
-
-      final subscription = client.auth.onAuthStateChange.listen((event) {
-        final eventRevision = ++revision;
-        verify(event.session?.user, eventRevision);
-      }, onError: sink.addError);
-      verify(client.auth.currentUser, revision);
-      sink.onCancel = subscription.cancel;
     });
+    ref.onDispose(() => _authSubscription?.cancel());
 
-final adminAccessProvider = StreamProvider<bool>((ref) {
-  final client = ref.watch(supabaseClientProvider);
-  if (client == null) return Stream<bool>.value(false);
-  return _administratorStream(client);
-});
+    final currentUser = client.auth.currentUser;
+    if (currentUser == null) {
+      _verifiedUserId = null;
+      return false;
+    }
+    _verifiedUserId = currentUser.id;
+    return isVerifiedAdministrator(client, currentUser);
+  }
+
+  Future<bool> verifyUser(SupabaseClient client, User? user) async {
+    final currentRevision = ++_revision;
+    if (user == null) {
+      _verifiedUserId = null;
+      state = const AsyncData(false);
+      return false;
+    }
+
+    state = const AsyncLoading();
+    try {
+      final isAdmin = await isVerifiedAdministrator(client, user);
+      if (currentRevision == _revision) {
+        _verifiedUserId = user.id;
+        state = AsyncData(isAdmin);
+      }
+      return isAdmin;
+    } catch (error, stackTrace) {
+      if (currentRevision == _revision) {
+        state = AsyncError(error, stackTrace);
+      }
+      rethrow;
+    }
+  }
+}
+
+final adminAccessProvider =
+    AsyncNotifierProvider<AdminAccessNotifier, bool>(AdminAccessNotifier.new);
 
 final productRepositoryProvider = Provider<ProductRepository>((ref) {
   return ProductRepository(ref.watch(supabaseClientProvider));

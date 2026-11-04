@@ -1,12 +1,34 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:norve/core/auth/application_role_provider.dart';
+import 'package:norve/core/auth/auth_providers.dart';
+import 'package:norve/core/auth/auth_repository.dart';
 import 'package:norve/core/supabase/supabase_config.dart';
 import 'package:norve/core/supabase/supabase_providers.dart';
 import 'package:norve/core/theme/norve_theme.dart';
 import 'package:norve/features/admin/admin_sign_in_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+class _LoadingAdminAccessNotifier extends AdminAccessNotifier {
+  @override
+  Future<bool> build() async {
+    state = const AsyncLoading();
+    return Completer<bool>().future;
+  }
+}
+
+class _ResolvedAdminAccessNotifier extends AdminAccessNotifier {
+  @override
+  Future<bool> build() async => true;
+}
+
+class _DeniedAdminAccessNotifier extends AdminAccessNotifier {
+  @override
+  Future<bool> build() async => false;
+}
 
 void main() {
   Widget buildTestWidget({
@@ -166,5 +188,201 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Back to account'), findsOneWidget);
+  });
+
+  group('Authorization state transitions and intermittent error prevention', () {
+    test(
+      'applicationRoleProvider stays in AsyncLoading when authSession exists but adminAccess is loading',
+      () {
+        final container = ProviderContainer(
+          overrides: [
+            authSessionProvider.overrideWith(
+              (ref) => Stream.value(
+                const AuthSession(
+                  userId: 'test-admin',
+                  email: 'admin@norve.com',
+                ),
+              ),
+            ),
+            adminAccessProvider.overrideWith(
+              _LoadingAdminAccessNotifier.new,
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final roleAsync = container.read(applicationRoleProvider);
+        expect(roleAsync.isLoading, isTrue);
+        expect(roleAsync.asData?.value, isNot(ApplicationRole.customer));
+      },
+    );
+
+    test(
+      'applicationRoleProvider resolves to administrator when adminAccess resolves to true',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            authSessionProvider.overrideWith(
+              (ref) => Stream.value(
+                const AuthSession(
+                  userId: 'test-admin',
+                  email: 'admin@norve.com',
+                ),
+              ),
+            ),
+            adminAccessProvider.overrideWith(
+              _ResolvedAdminAccessNotifier.new,
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final completer = Completer<ApplicationRole>();
+        container.listen<AsyncValue<ApplicationRole>>(
+          applicationRoleProvider,
+          (previous, next) {
+            if (next.hasValue && !completer.isCompleted) {
+              completer.complete(next.value);
+            }
+          },
+          fireImmediately: true,
+        );
+
+        final role = await completer.future.timeout(
+          const Duration(seconds: 3),
+        );
+        expect(role, ApplicationRole.administrator);
+      },
+    );
+
+    test(
+      'applicationRoleProvider resolves to customer only when adminAccess definitively resolves to false',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            authSessionProvider.overrideWith(
+              (ref) => Stream.value(
+                const AuthSession(
+                  userId: 'test-cust',
+                  email: 'customer@norve.com',
+                ),
+              ),
+            ),
+            adminAccessProvider.overrideWith(
+              _DeniedAdminAccessNotifier.new,
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final completer = Completer<ApplicationRole>();
+        container.listen<AsyncValue<ApplicationRole>>(
+          applicationRoleProvider,
+          (previous, next) {
+            if (next.hasValue && !completer.isCompleted) {
+              completer.complete(next.value);
+            }
+          },
+          fireImmediately: true,
+        );
+
+        final role = await completer.future.timeout(
+          const Duration(seconds: 3),
+        );
+        expect(role, ApplicationRole.customer);
+      },
+    );
+
+    testWidgets(
+      'AdminSignInScreen does not display unauthorized banner while authorization is loading',
+      (tester) async {
+        final client = SupabaseClient(
+          'https://example.supabase.co',
+          'sb_publishable_test',
+          authOptions: const AuthClientOptions(autoRefreshToken: false),
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              applicationRoleProvider.overrideWithValue(
+                const AsyncLoading(),
+              ),
+              adminAccessProvider.overrideWith(
+                _LoadingAdminAccessNotifier.new,
+              ),
+              supabaseConfigProvider.overrideWithValue(
+                const SupabaseConfig(
+                  url: 'https://example.supabase.co',
+                  publishableKey: 'sb_publishable_test',
+                ),
+              ),
+              supabaseClientProvider.overrideWithValue(client),
+              supabaseStartupErrorProvider.overrideWithValue(null),
+            ],
+            child: MaterialApp(
+              theme: NorveTheme.light,
+              home: const AdminSignInScreen(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.byKey(const ValueKey('admin-unauthorized-session')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey('admin-auth-error')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey('admin-sign-in-submit')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'AdminSignInScreen displays unauthorized banner only when customer role is definitively resolved',
+      (tester) async {
+        final client = SupabaseClient(
+          'https://example.supabase.co',
+          'sb_publishable_test',
+          authOptions: const AuthClientOptions(autoRefreshToken: false),
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              applicationRoleProvider.overrideWithValue(
+                const AsyncData(ApplicationRole.customer),
+              ),
+              adminAccessProvider.overrideWith(
+                _DeniedAdminAccessNotifier.new,
+              ),
+              supabaseConfigProvider.overrideWithValue(
+                const SupabaseConfig(
+                  url: 'https://example.supabase.co',
+                  publishableKey: 'sb_publishable_test',
+                ),
+              ),
+              supabaseClientProvider.overrideWithValue(client),
+              supabaseStartupErrorProvider.overrideWithValue(null),
+            ],
+            child: MaterialApp(
+              theme: NorveTheme.light,
+              home: const AdminSignInScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('admin-unauthorized-session')),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }

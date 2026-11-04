@@ -15,15 +15,18 @@ final applicationRoleProvider = Provider<AsyncValue<ApplicationRole>>((ref) {
     return const AsyncData(ApplicationRole.signedOut);
   }
 
-  return ref
-      .watch(adminAccessProvider)
-      .when(
-        data: (isAdministrator) => AsyncData(
-          isAdministrator
-              ? ApplicationRole.administrator
-              : ApplicationRole.customer,
-        ),
-        error: AsyncError.new,
-        loading: () => const AsyncLoading(),
-      );
+  final adminAccess = ref.watch(adminAccessProvider);
+  if (adminAccess.isLoading) {
+    return const AsyncLoading();
+  }
+  if (adminAccess.hasError) {
+    return AsyncError(adminAccess.error!, adminAccess.stackTrace!);
+  }
+
+  final isAdministrator = adminAccess.asData?.value ?? false;
+  return AsyncData(
+    isAdministrator
+        ? ApplicationRole.administrator
+        : ApplicationRole.customer,
+  );
 });

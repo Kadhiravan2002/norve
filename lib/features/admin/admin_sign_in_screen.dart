@@ -43,25 +43,19 @@ class _AdminSignInScreenState extends ConsumerState<AdminSignInScreen> {
     final client = ref.watch(supabaseClientProvider);
     final role = ref.watch(applicationRoleProvider).asData?.value;
     final adminAccess = ref.watch(adminAccessProvider);
-    final authorized = role == ApplicationRole.administrator ||
-        adminAccess.asData?.value == true;
+    final authorized = role == ApplicationRole.administrator;
     final accessError = adminAccess.asError?.error;
-    final hasCustomerSession = role == ApplicationRole.customer ||
-        (client?.auth.currentUser != null && adminAccess.asData?.value == false);
+    final hasCustomerSession = !_busy &&
+        !adminAccess.isLoading &&
+        (role == ApplicationRole.customer ||
+            (client?.auth.currentUser != null &&
+                adminAccess.asData?.value == false));
     final unavailableMessage = startupError ?? config.configurationMessage;
     final canSignIn =
         client != null && startupError == null && config.isConfigured;
 
     ref.listen<AsyncValue<ApplicationRole>>(applicationRoleProvider, (previous, next) {
-      if (next.asData?.value == ApplicationRole.administrator) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) context.go('/admin');
-        });
-      }
-    });
-
-    ref.listen<AsyncValue<bool>>(adminAccessProvider, (previous, next) {
-      if (next.asData?.value == true) {
+      if (!_busy && next.asData?.value == ApplicationRole.administrator) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) context.go('/admin');
         });
@@ -521,7 +515,10 @@ class _AdminSignInScreenState extends ConsumerState<AdminSignInScreen> {
         email: _email.text.trim(),
         password: _password.text,
       );
-      if (!await isVerifiedAdministrator(client, response.user)) {
+      final isAdmin = await ref
+          .read(adminAccessProvider.notifier)
+          .verifyUser(client, response.user);
+      if (!isAdmin) {
         await client.auth.signOut();
         throw const _NotAdministratorException();
       }
