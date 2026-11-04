@@ -432,4 +432,79 @@ void main() {
     expect(find.text('Orders'), findsOneWidget);
     expect(find.text('TOTAL ORDERS'), findsOneWidget);
   });
+
+  testWidgets(
+      'Orders renders 2-column KPI grid at 390px and 425px mobile widths with equal card widths and consistent row heights',
+      (tester) async {
+    for (final width in [425.0, 390.0]) {
+      tester.view.physicalSize = Size(width, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        buildApp(orders: testOrders, viewport: Size(width, 844)),
+      );
+      await tester.pumpAndSettle();
+
+      // Zero exceptions (no RenderFlex overflow)
+      expect(tester.takeException(), isNull);
+
+      // Verify all 5 KPI cards are rendered
+      final totalOrdersKpi = find.text('TOTAL ORDERS');
+      final itemsOrderedKpi = find.text('ITEMS ORDERED');
+      final awaitingKpi = find.text('AWAITING FULFILLMENT');
+      final deliveredKpi = find.text('ORDERS DELIVERED');
+      final cancelledKpi = find.text('CANCELLED ORDERS');
+
+      expect(totalOrdersKpi, findsOneWidget);
+      expect(itemsOrderedKpi, findsOneWidget);
+      expect(awaitingKpi, findsOneWidget);
+      expect(deliveredKpi, findsOneWidget);
+      expect(cancelledKpi, findsOneWidget);
+
+      // Find KPI card containers to check dimensions and layout
+      Finder findKpiCard(Finder labelFinder) {
+        return find.ancestor(
+          of: labelFinder,
+          matching: find.byType(Container),
+        ).first;
+      }
+
+      final card0 = findKpiCard(totalOrdersKpi);
+      final card1 = findKpiCard(itemsOrderedKpi);
+      final card2 = findKpiCard(awaitingKpi);
+      final card3 = findKpiCard(deliveredKpi);
+      final card4 = findKpiCard(cancelledKpi);
+
+      final pos0 = tester.getTopLeft(card0);
+      final pos1 = tester.getTopLeft(card1);
+      final pos2 = tester.getTopLeft(card2);
+      final pos3 = tester.getTopLeft(card3);
+      final pos4 = tester.getTopLeft(card4);
+
+      final size0 = tester.getSize(card0);
+      final size1 = tester.getSize(card1);
+      final size2 = tester.getSize(card2);
+      final size3 = tester.getSize(card3);
+      final size4 = tester.getSize(card4);
+
+      // Row 1 (Card 0 & Card 1): same row, equal widths, consistent heights
+      expect(pos0.dy, equals(pos1.dy));
+      expect(pos0.dx, lessThan(pos1.dx));
+      expect(size0.width, equals(size1.width));
+      expect(size0.height, equals(size1.height));
+
+      // Row 2 (Card 2 & Card 3): same row, equal widths, consistent heights
+      expect(pos2.dy, equals(pos3.dy));
+      expect(pos2.dx, lessThan(pos3.dx));
+      expect(size2.width, equals(size3.width));
+      expect(size2.height, equals(size3.height));
+      expect(pos2.dy, greaterThan(pos0.dy));
+
+      // Row 3 (Card 4): below row 2, aligned to column 1, equal card width
+      expect(pos4.dy, greaterThan(pos2.dy));
+      expect(pos4.dx, equals(pos0.dx));
+      expect(size4.width, equals(size0.width));
+    }
+  });
 }

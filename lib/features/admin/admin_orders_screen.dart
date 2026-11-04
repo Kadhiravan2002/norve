@@ -306,35 +306,91 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
-        final int columns = screenWidth >= 1050
-            ? 5
-            : screenWidth >= 700
-                ? 3
-                : screenWidth >= 420
-                    ? 2
-                    : 1;
-
         final isCompact = screenWidth < 700;
-        final cardSpacing = isCompact ? 12.0 : 16.0;
-        final itemWidth =
-            (screenWidth - ((columns - 1) * cardSpacing)) / columns;
+        final isMobile = screenWidth < 500;
 
-        return Wrap(
-          spacing: cardSpacing,
-          runSpacing: cardSpacing,
-          children: [
-            for (final kpi in kpis)
-              SizedBox(
-                width: itemWidth,
-                child: _OrderKpiCard(
-                  label: kpi.label,
-                  value: kpi.value,
-                  caption: kpi.caption,
-                  icon: kpi.icon,
-                  badgeVariant: kpi.badgeVariant,
-                  isCompact: isCompact,
+        Widget buildCard(({
+          AdminBadgeVariant badgeVariant,
+          String caption,
+          IconData icon,
+          String label,
+          String value,
+        }) kpi) {
+          return _OrderKpiCard(
+            label: kpi.label,
+            value: kpi.value,
+            caption: kpi.caption,
+            icon: kpi.icon,
+            badgeVariant: kpi.badgeVariant,
+            isCompact: isCompact,
+            isMobile: isMobile,
+          );
+        }
+
+        if (screenWidth >= 1050) {
+          return Row(
+            children: [
+              for (int i = 0; i < kpis.length; i++) ...[
+                if (i > 0) const SizedBox(width: 16),
+                Expanded(child: buildCard(kpis[i])),
+              ],
+            ],
+          );
+        }
+
+        if (screenWidth >= 700) {
+          const cardSpacing = 16.0;
+          final itemWidth = (screenWidth - (2 * cardSpacing)) / 3;
+          return Wrap(
+            spacing: cardSpacing,
+            runSpacing: cardSpacing,
+            children: [
+              for (final kpi in kpis)
+                SizedBox(
+                  width: itemWidth,
+                  child: buildCard(kpi),
                 ),
+            ],
+          );
+        }
+
+        // 2-column grid for tablet portrait and all mobile widths (< 700px)
+        final spacing = isMobile ? AdminSpacing.md : 12.0;
+
+        return Column(
+          children: [
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: buildCard(kpis[0])),
+                  SizedBox(width: spacing),
+                  Expanded(child: buildCard(kpis[1])),
+                ],
               ),
+            ),
+            SizedBox(height: spacing),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: buildCard(kpis[2])),
+                  SizedBox(width: spacing),
+                  Expanded(child: buildCard(kpis[3])),
+                ],
+              ),
+            ),
+            SizedBox(height: spacing),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: buildCard(kpis[4])),
+                  SizedBox(width: spacing),
+                  const Expanded(child: SizedBox.shrink()),
+                ],
+              ),
+            ),
           ],
         );
       },
@@ -953,68 +1009,82 @@ class _AdminOrdersScreenState extends ConsumerState<AdminOrdersScreen> {
           bottom: AdminBorders.sideSubtle,
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Range caption
-          Text(
-            'Showing $startIndex–$endIndex of $totalMatching orders',
-            style: AdminTypography.caption,
-          ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: constraints.maxWidth,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Range caption
+                  Text(
+                    'Showing $startIndex–$endIndex of $totalMatching orders',
+                    style: AdminTypography.caption,
+                  ),
 
-          // Pagination controls
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Rows per page: ', style: AdminTypography.caption),
-              DropdownButton<int>(
-                value: _pageSize,
-                underline: const SizedBox.shrink(),
-                style: AdminTypography.body,
-                dropdownColor: AdminColors.white,
-                borderRadius: AdminRadii.radiusSm,
-                items: const [
-                  DropdownMenuItem(value: 5, child: Text('5')),
-                  DropdownMenuItem(value: 10, child: Text('10')),
-                  DropdownMenuItem(value: 25, child: Text('25')),
-                  DropdownMenuItem(value: 50, child: Text('50')),
+                  const SizedBox(width: 24),
+
+                  // Pagination controls
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Rows per page: ', style: AdminTypography.caption),
+                      DropdownButton<int>(
+                        value: _pageSize,
+                        underline: const SizedBox.shrink(),
+                        style: AdminTypography.body,
+                        dropdownColor: AdminColors.white,
+                        borderRadius: AdminRadii.radiusSm,
+                        items: const [
+                          DropdownMenuItem(value: 5, child: Text('5')),
+                          DropdownMenuItem(value: 10, child: Text('10')),
+                          DropdownMenuItem(value: 25, child: Text('25')),
+                          DropdownMenuItem(value: 50, child: Text('50')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _pageSize = val;
+                              _currentPage = 1;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      IconButton(
+                        key: const ValueKey('pagination-prev'),
+                        tooltip: 'Previous page',
+                        icon: const Icon(Icons.chevron_left, size: 20),
+                        onPressed: safePage > 1
+                            ? () => setState(() => _currentPage = safePage - 1)
+                            : null,
+                      ),
+                      Text(
+                        '$safePage of $totalPages',
+                        style: AdminTypography.caption.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AdminColors.charcoal,
+                        ),
+                      ),
+                      IconButton(
+                        key: const ValueKey('pagination-next'),
+                        tooltip: 'Next page',
+                        icon: const Icon(Icons.chevron_right, size: 20),
+                        onPressed: safePage < totalPages
+                            ? () => setState(() => _currentPage = safePage + 1)
+                            : null,
+                      ),
+                    ],
+                  ),
                 ],
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      _pageSize = val;
-                      _currentPage = 1;
-                    });
-                  }
-                },
               ),
-              const SizedBox(width: 16),
-              IconButton(
-                key: const ValueKey('pagination-prev'),
-                tooltip: 'Previous page',
-                icon: const Icon(Icons.chevron_left, size: 20),
-                onPressed: safePage > 1
-                    ? () => setState(() => _currentPage = safePage - 1)
-                    : null,
-              ),
-              Text(
-                '$safePage of $totalPages',
-                style: AdminTypography.caption.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AdminColors.charcoal,
-                ),
-              ),
-              IconButton(
-                key: const ValueKey('pagination-next'),
-                tooltip: 'Next page',
-                icon: const Icon(Icons.chevron_right, size: 20),
-                onPressed: safePage < totalPages
-                    ? () => setState(() => _currentPage = safePage + 1)
-                    : null,
-              ),
-            ],
-          ),
-        ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -1032,6 +1102,7 @@ class _OrderKpiCard extends StatelessWidget {
     required this.icon,
     required this.badgeVariant,
     this.isCompact = false,
+    this.isMobile = false,
   });
 
   final String label;
@@ -1040,13 +1111,14 @@ class _OrderKpiCard extends StatelessWidget {
   final IconData icon;
   final AdminBadgeVariant badgeVariant;
   final bool isCompact;
+  final bool isMobile;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: isCompact ? 14 : AdminSpacing.lg,
-        vertical: isCompact ? 12 : AdminSpacing.lg,
+        horizontal: isMobile ? 12 : (isCompact ? 14 : AdminSpacing.lg),
+        vertical: isMobile ? 12 : (isCompact ? 12 : AdminSpacing.lg),
       ),
       decoration: const BoxDecoration(
         color: AdminColors.white,
@@ -1062,14 +1134,18 @@ class _OrderKpiCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   label.toUpperCase(),
-                  style: AdminTypography.tableHeader,
+                  style: AdminTypography.tableHeader.copyWith(
+                    fontSize: isMobile ? 10 : 11,
+                    letterSpacing: isMobile ? 0.8 : 1.0,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 4),
               Icon(
                 icon,
-                size: 18,
+                size: isMobile ? 16 : 18,
                 color: switch (badgeVariant) {
                   AdminBadgeVariant.success => AdminColors.success,
                   AdminBadgeVariant.warning => AdminColors.warning,
@@ -1079,24 +1155,28 @@ class _OrderKpiCard extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: isCompact ? AdminSpacing.sm : AdminSpacing.md),
+          SizedBox(height: isMobile ? 6 : (isCompact ? AdminSpacing.sm : AdminSpacing.md)),
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontFamily: 'Inter',
-              fontSize: isCompact ? 22 : 24,
+              fontSize: isMobile ? 22 : (isCompact ? 22 : 24),
               fontWeight: FontWeight.w600,
               letterSpacing: -0.5,
               color: AdminColors.charcoal,
             ),
           ),
-          const SizedBox(height: AdminSpacing.xs),
+          SizedBox(height: isMobile ? 2 : AdminSpacing.xs),
           Text(
             caption,
             style: AdminTypography.caption.copyWith(
+              fontSize: isMobile ? 11 : null,
+              height: 1.25,
               color: AdminColors.neutralGrey,
             ),
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
         ],
