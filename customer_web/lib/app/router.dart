@@ -5,33 +5,22 @@ import 'package:norve/core/auth/auth_providers.dart';
 import 'package:norve/core/supabase/supabase_providers.dart';
 import 'package:norve/features/account/customer_order_details_screen.dart';
 import 'package:norve/features/account/order_history_screen.dart';
-import 'package:norve/features/bag/bag_screen.dart';
 import 'package:norve/features/navigation/administrator_web_access_screen.dart';
-import 'package:norve/features/orders/checkout_screen.dart';
-import 'package:norve/features/wishlist/wishlist_screen.dart';
 
 import '../catalog/catalog_query.dart';
 import '../pages/account_page.dart';
 import '../pages/auth_page.dart';
+import '../pages/bag_page.dart';
+import '../pages/checkout_page.dart';
 import '../pages/home_page.dart';
 import '../pages/not_found_page.dart';
 import '../pages/password_reset_page.dart';
 import '../pages/product_route_page.dart';
 import '../pages/shop_page.dart';
+import '../pages/wishlist_page.dart';
 import '../shell/storefront_shell.dart';
 import '../widgets/back_link_frame.dart';
-import 'breakpoints.dart';
 import 'route_guards.dart';
-
-/// Existing mobile screens own their scrolling, so they are only width-capped.
-Widget _capped(Widget child) => Center(
-  child: ConstrainedBox(
-    constraints: const BoxConstraints(
-      maxWidth: StorefrontBreakpoints.contentMaxWidth,
-    ),
-    child: child,
-  ),
-);
 
 final storefrontRouterProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier<int>(0);
@@ -74,12 +63,9 @@ final storefrontRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/wishlist',
-            builder: (context, state) => _capped(const WishlistScreen()),
+            builder: (context, state) => const WishlistPage(),
           ),
-          GoRoute(
-            path: '/bag',
-            builder: (context, state) => _capped(const BagScreen()),
-          ),
+          GoRoute(path: '/bag', builder: (context, state) => const BagPage()),
           GoRoute(
             path: loginPath,
             builder: (context, state) => AuthPage(
@@ -120,7 +106,7 @@ final storefrontRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/checkout',
-        builder: (context, state) => const CheckoutScreen(),
+        builder: (context, state) => const CheckoutPage(),
       ),
       GoRoute(
         path: passwordResetPath,

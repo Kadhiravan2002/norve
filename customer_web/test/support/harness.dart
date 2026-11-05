@@ -9,13 +9,16 @@ import 'package:norve/core/auth/auth_providers.dart';
 import 'package:norve/core/auth/auth_repository.dart';
 import 'package:norve/core/supabase/supabase_config.dart';
 import 'package:norve/core/supabase/supabase_providers.dart';
+import 'package:norve/features/account/customer_data_repository.dart';
 import 'package:norve/features/products/product.dart';
 import 'package:norve/features/products/product_repository.dart';
+import 'package:norve/features/wishlist/wishlist_provider.dart';
 import 'package:norve_customer_web/app/password_recovery.dart';
 import 'package:norve_customer_web/app/provider_retry.dart';
 import 'package:norve_customer_web/app/router.dart';
 import 'package:norve_customer_web/app/storefront_app.dart';
 import 'package:norve_customer_web/catalog/storefront_catalog_repository.dart';
+import 'package:norve_customer_web/wishlist/storefront_wishlist.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const testProductId = '11111111-1111-4111-8111-111111111111';
@@ -122,6 +125,29 @@ class GuestAuthRepository implements AuthRepository {
   Future<void> updatePassword(String password) async {}
 }
 
+class FakeCustomerData implements CustomerDataRepository {
+  @override
+  Future<CustomerProfile?> loadProfile() async => const CustomerProfile(
+    userId: 'user-1',
+    fullName: 'Asha Rao',
+    phone: '+91 98765 43210',
+  );
+  @override
+  Future<List<CustomerAddress>> loadAddresses() async => const [];
+  @override
+  Future<CustomerProfile> saveProfile({
+    required String fullName,
+    required String phone,
+  }) => throw UnimplementedError();
+  @override
+  Future<CustomerAddress> saveAddress(CustomerAddress address) =>
+      throw UnimplementedError();
+  @override
+  Future<void> setDefaultAddress(String addressId) async {}
+  @override
+  Future<void> deleteAddress(String addressId) async {}
+}
+
 /// An account service whose session and responses each test controls.
 class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository({this.session, this.onSignIn, this.onSignUp});
@@ -217,6 +243,7 @@ Future<ProviderContainer> pumpStorefront(
       ),
       authRepositoryProvider.overrideWithValue(auth ?? GuestAuthRepository()),
       siteBaseUriProvider.overrideWithValue(Uri.parse('https://norve.test/')),
+      wishlistProvider.overrideWith(StorefrontWishlistController.new),
       ...overrides,
       productRepositoryProvider.overrideWithValue(
         FakeProductRepository(

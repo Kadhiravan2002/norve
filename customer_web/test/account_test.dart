@@ -3,36 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:norve/core/auth/auth_repository.dart';
 import 'package:norve/features/account/customer_data_providers.dart';
-import 'package:norve/features/account/customer_data_repository.dart';
 import 'package:norve/features/orders/order_providers.dart';
 import 'package:norve_customer_web/app/password_recovery.dart';
 import 'package:norve_customer_web/pages/auth_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'support/harness.dart';
-
-class FakeCustomerData implements CustomerDataRepository {
-  @override
-  Future<CustomerProfile?> loadProfile() async => const CustomerProfile(
-    userId: 'user-1',
-    fullName: 'Asha Rao',
-    phone: '+91 98765 43210',
-  );
-  @override
-  Future<List<CustomerAddress>> loadAddresses() async => const [];
-  @override
-  Future<CustomerProfile> saveProfile({
-    required String fullName,
-    required String phone,
-  }) => throw UnimplementedError();
-  @override
-  Future<CustomerAddress> saveAddress(CustomerAddress address) =>
-      throw UnimplementedError();
-  @override
-  Future<void> setDefaultAddress(String addressId) async {}
-  @override
-  Future<void> deleteAddress(String addressId) async {}
-}
 
 late ProviderContainer container;
 

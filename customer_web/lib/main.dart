@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:norve/core/supabase/supabase_config.dart';
 import 'package:norve/core/supabase/supabase_providers.dart';
 import 'package:norve/features/bag/bag_provider.dart';
+import 'package:norve/features/orders/order_providers.dart';
+import 'package:norve/features/orders/order_repository.dart';
+import 'package:norve/features/wishlist/wishlist_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -12,7 +15,10 @@ import 'app/fonts.dart';
 import 'app/password_recovery.dart';
 import 'app/provider_retry.dart';
 import 'app/storefront_app.dart';
+import 'orders/interrupted_order.dart';
+import 'orders/storefront_order_repository.dart';
 import 'pages/storefront_unavailable_app.dart';
+import 'wishlist/storefront_wishlist.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,6 +63,13 @@ Future<void> main() async {
         supabaseConfigProvider.overrideWithValue(config),
         supabaseClientProvider.overrideWithValue(client),
         bagPreferencesProvider.overrideWithValue(bagPreferences),
+        wishlistProvider.overrideWith(StorefrontWishlistController.new),
+        orderRepositoryProvider.overrideWith(
+          (ref) => StorefrontOrderRepository(
+            SupabaseOrderRepository(client),
+            ref.watch(interruptedOrderStoreProvider),
+          ),
+        ),
       ],
       child: const StorefrontApp(),
     ),
