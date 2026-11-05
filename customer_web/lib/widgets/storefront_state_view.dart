@@ -72,10 +72,7 @@ class StorefrontMessageView extends StatelessWidget {
               ),
               if (actionLabel != null) ...[
                 const SizedBox(height: 24),
-                OutlinedButton(
-                  onPressed: onAction,
-                  child: Text(actionLabel!),
-                ),
+                OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
               ],
             ],
           ),

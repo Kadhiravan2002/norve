@@ -43,6 +43,5 @@ final storefrontCatalogRepositoryProvider =
 /// Fetched each time a product page opens, so stock and price are current.
 final storefrontProductProvider = FutureProvider.autoDispose
     .family<Product?, String>(
-      (ref, id) =>
-          ref.watch(storefrontCatalogRepositoryProvider).fetchById(id),
+      (ref, id) => ref.watch(storefrontCatalogRepositoryProvider).fetchById(id),
     );

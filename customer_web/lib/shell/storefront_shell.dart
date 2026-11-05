@@ -8,11 +8,11 @@ import 'storefront_header.dart';
 class StorefrontShell extends StatelessWidget {
   const StorefrontShell({
     super.key,
-    required this.currentPath,
+    required this.currentUri,
     required this.child,
   });
 
-  final String currentPath;
+  final Uri currentUri;
   final Widget child;
 
   @override
@@ -22,9 +22,12 @@ class StorefrontShell extends StatelessWidget {
         : const _StorefrontDrawer(),
     body: Column(
       children: [
-        StorefrontHeader(currentPath: currentPath),
+        StorefrontHeader(currentUri: currentUri),
         const Divider(),
-        Expanded(child: child),
+        // A route blocks accessibility for anything painted before it in the
+        // same semantics container. Its own container keeps the header visible
+        // to screen readers.
+        Expanded(child: Semantics(container: true, child: child)),
       ],
     ),
   );

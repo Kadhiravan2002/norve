@@ -18,7 +18,8 @@ class NotFoundPage extends StatelessWidget {
           child: SingleChildScrollView(
             child: StorefrontMessageView(
               title: 'This page could not be found',
-              message: 'The link may be out of date, or the page may have moved.',
+              message:
+                  'The link may be out of date, or the page may have moved.',
               actionLabel: 'Continue Shopping',
               onAction: () => context.go('/shop'),
             ),

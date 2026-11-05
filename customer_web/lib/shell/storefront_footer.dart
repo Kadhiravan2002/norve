@@ -4,6 +4,17 @@ import 'package:norve/core/theme/norve_theme.dart';
 
 import '../app/breakpoints.dart';
 
+/// Places the footer at the end of a page, and at the bottom of a short one.
+class StorefrontFooterSliver extends StatelessWidget {
+  const StorefrontFooterSliver({super.key});
+
+  @override
+  Widget build(BuildContext context) => const SliverFillRemaining(
+    hasScrollBody: false,
+    child: Align(alignment: Alignment.bottomCenter, child: StorefrontFooter()),
+  );
+}
+
 class StorefrontFooter extends StatelessWidget {
   const StorefrontFooter({super.key});
 
@@ -40,6 +51,7 @@ class StorefrontFooter extends StatelessWidget {
       title: 'SHOP',
       links: [
         (label: 'All products', route: '/shop'),
+        (label: 'New arrivals', route: '/?newArrivals=true'),
         (label: 'Wishlist', route: '/wishlist'),
         (label: 'Bag', route: '/bag'),
       ],
@@ -101,10 +113,8 @@ class _FooterColumn extends StatelessWidget {
     children: [
       Text(
         title,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: NorveColors.line,
-          letterSpacing: 1.6,
-        ),
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: NorveColors.line, letterSpacing: 1.6),
       ),
       const SizedBox(height: 10),
       for (final link in links)

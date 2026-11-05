@@ -12,9 +12,11 @@ import 'package:norve/features/navigation/administrator_web_access_screen.dart';
 import 'package:norve/features/orders/checkout_screen.dart';
 import 'package:norve/features/wishlist/wishlist_screen.dart';
 
-import '../pages/catalogue_page.dart';
+import '../catalog/catalog_query.dart';
+import '../pages/home_page.dart';
 import '../pages/not_found_page.dart';
 import '../pages/product_route_page.dart';
+import '../pages/shop_page.dart';
 import '../shell/storefront_shell.dart';
 import 'breakpoints.dart';
 import 'route_guards.dart';
@@ -45,17 +47,28 @@ final storefrontRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       ShellRoute(
         builder: (context, state, child) =>
-            StorefrontShell(currentPath: state.uri.path, child: child),
+            StorefrontShell(currentUri: state.uri, child: child),
         routes: [
           GoRoute(
             path: '/',
-            builder: (context, state) =>
-                const CataloguePage(kind: CataloguePageKind.home),
+            builder: (context, state) => HomePage(
+              location: state.uri.toString(),
+              selectedCategoryId: state.uri.queryParameters['categoryId'],
+              newArrivals: state.uri.queryParameters['newArrivals'] == 'true',
+            ),
           ),
           GoRoute(
             path: '/shop',
+            builder: (context, state) => ShopPage(
+              location: state.uri.toString(),
+              query: CatalogQuery.fromUri(state.uri),
+              focusSearch: state.extra == focusShopSearch,
+            ),
+          ),
+          GoRoute(
+            path: '/product/:productId',
             builder: (context, state) =>
-                const CataloguePage(kind: CataloguePageKind.shop),
+                ProductRoutePage(productId: state.pathParameters['productId']!),
           ),
           GoRoute(
             path: '/wishlist',
@@ -82,11 +95,6 @@ final storefrontRouterProvider = Provider<GoRouter>((ref) {
             ),
           ),
         ],
-      ),
-      GoRoute(
-        path: '/product/:productId',
-        builder: (context, state) =>
-            ProductRoutePage(productId: state.pathParameters['productId']!),
       ),
       GoRoute(
         path: '/checkout',

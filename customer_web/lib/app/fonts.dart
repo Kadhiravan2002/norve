@@ -9,9 +9,9 @@ import 'package:flutter/services.dart';
 Future<void> loadNorveFonts() async {
   try {
     await Future.wait([
-      (FontLoader(
-        'Inter',
-      )..addFont(rootBundle.load('packages/norve/assets/fonts/Inter.ttf'))).load(),
+      (FontLoader('Inter')
+            ..addFont(rootBundle.load('packages/norve/assets/fonts/Inter.ttf')))
+          .load(),
       (FontLoader('PlayfairDisplay')..addFont(
             rootBundle.load('packages/norve/assets/fonts/PlayfairDisplay.ttf'),
           ))

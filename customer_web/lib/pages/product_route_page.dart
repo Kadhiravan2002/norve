@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:norve/features/products/product_details_screen.dart';
 
 import '../catalog/storefront_catalog_repository.dart';
-import '../shell/storefront_header.dart';
 import '../widgets/storefront_state_view.dart';
+import 'product_details_page.dart';
 
 /// Opens a product directly from its URL, without waiting for the catalogue.
-///
-/// Phase 1 mounts the existing product screen, which has its own app bar.
-/// Phase 2 replaces it with the desktop-ready product page.
 class ProductRoutePage extends ConsumerWidget {
   const ProductRoutePage({super.key, required this.productId});
 
@@ -21,11 +17,11 @@ class ProductRoutePage extends ConsumerWidget {
     final product = ref.watch(storefrontProductProvider(productId));
     return product.when(
       skipLoadingOnRefresh: false,
-      loading: () => _frame(
-        const StorefrontLoadingView(label: 'Loading this piece'),
+      loading: () => const SingleChildScrollView(
+        child: StorefrontLoadingView(label: 'Loading this piece'),
       ),
-      error: (error, stackTrace) => _frame(
-        StorefrontMessageView(
+      error: (error, stackTrace) => SingleChildScrollView(
+        child: StorefrontMessageView(
           icon: Icons.cloud_off_outlined,
           title: 'This piece could not be loaded',
           message: 'Check your connection and try again.',
@@ -34,8 +30,8 @@ class ProductRoutePage extends ConsumerWidget {
         ),
       ),
       data: (value) => value == null
-          ? _frame(
-              StorefrontMessageView(
+          ? SingleChildScrollView(
+              child: StorefrontMessageView(
                 icon: Icons.checkroom_outlined,
                 title: 'Product unavailable',
                 message: 'This piece is no longer available.',
@@ -43,17 +39,7 @@ class ProductRoutePage extends ConsumerWidget {
                 onAction: () => context.go('/shop'),
               ),
             )
-          : ProductDetailsScreen(key: ValueKey(value.id), product: value),
+          : ProductDetailsPage(key: ValueKey(value.id), product: value),
     );
   }
-
-  Widget _frame(Widget child) => Scaffold(
-    body: Column(
-      children: [
-        const StorefrontHeader(showMenu: false),
-        const Divider(),
-        Expanded(child: SingleChildScrollView(child: child)),
-      ],
-    ),
-  );
 }

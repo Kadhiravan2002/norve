@@ -5,26 +5,34 @@ import 'package:norve/core/theme/norve_theme.dart';
 import 'package:norve/features/bag/bag_provider.dart';
 
 import '../app/breakpoints.dart';
+import '../pages/shop_page.dart';
 
 typedef StorefrontLink = ({String label, IconData icon, String route});
 
-/// The same five destinations as the mobile app's navigation.
+const newArrivalsRoute = '/?newArrivals=true';
+
+/// The mobile app's five destinations, plus a direct link to New Arrivals.
 const List<StorefrontLink> storefrontLinks = [
   (label: 'Home', icon: Icons.home_outlined, route: '/'),
   (label: 'Shop', icon: Icons.grid_view_outlined, route: '/shop'),
+  (
+    label: 'New Arrivals',
+    icon: Icons.new_releases_outlined,
+    route: newArrivalsRoute,
+  ),
   (label: 'Wishlist', icon: Icons.favorite_border, route: '/wishlist'),
   (label: 'Bag', icon: Icons.shopping_bag_outlined, route: '/bag'),
   (label: 'Account', icon: Icons.person_outline, route: '/account'),
 ];
 
 class StorefrontHeader extends StatelessWidget {
-  const StorefrontHeader({super.key, this.showMenu = true, this.currentPath});
+  const StorefrontHeader({super.key, this.showMenu = true, this.currentUri});
 
   /// False where no drawer exists, such as the standalone 404 page.
   final bool showMenu;
 
   /// Highlights the matching nav link. Null on pages outside the shell.
-  final String? currentPath;
+  final Uri? currentUri;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +41,9 @@ class StorefrontHeader extends StatelessWidget {
     final phone = StorefrontBreakpoints.isPhone(width);
     final desktop = StorefrontBreakpoints.isDesktop(width);
     final menu = showMenu && !desktop;
+    final path = currentUri?.path;
+    final showingNewArrivals =
+        path == '/' && currentUri?.queryParameters['newArrivals'] == 'true';
 
     return Material(
       key: const ValueKey('storefront-header'),
@@ -53,19 +64,20 @@ class StorefrontHeader extends StatelessWidget {
                       _NavText(
                         label: 'Home',
                         route: '/',
-                        selected: currentPath == '/',
+                        selected: path == '/' && !showingNewArrivals,
                       ),
                       _NavText(
                         label: 'Shop',
                         route: '/shop',
-                        selected: currentPath == '/shop',
+                        selected: path == '/shop',
+                      ),
+                      _NavText(
+                        label: 'New Arrivals',
+                        route: newArrivalsRoute,
+                        selected: showingNewArrivals,
                       ),
                       const Spacer(),
-                      const _HeaderIcon(
-                        icon: Icons.search,
-                        label: 'Search',
-                        route: '/shop',
-                      ),
+                      const _SearchIcon(),
                       const _HeaderIcon(
                         icon: Icons.favorite_border,
                         label: 'Wishlist',
@@ -96,12 +108,7 @@ class StorefrontHeader extends StatelessWidget {
                               ),
                             ),
                           const Spacer(),
-                          if (!phone)
-                            const _HeaderIcon(
-                              icon: Icons.search,
-                              label: 'Search',
-                              route: '/shop',
-                            ),
+                          const _SearchIcon(),
                           const _BagIcon(),
                         ],
                       ),
@@ -170,6 +177,18 @@ class _NavText extends StatelessWidget {
       child: Text(label),
     );
   }
+}
+
+class _SearchIcon extends StatelessWidget {
+  const _SearchIcon();
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey('storefront-search'),
+    tooltip: 'Search',
+    onPressed: () => context.go('/shop', extra: focusShopSearch),
+    icon: const Icon(Icons.search, size: 21),
+  );
 }
 
 class _HeaderIcon extends StatelessWidget {
