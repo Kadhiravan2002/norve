@@ -15,8 +15,11 @@ class ProductRoutePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final product = ref.watch(storefrontProductProvider(productId));
+    // A page already on screen stays there through a refresh, and through a
+    // refresh that fails. Retrying after an error still shows the spinner.
     return product.when(
-      skipLoadingOnRefresh: false,
+      skipLoadingOnRefresh: product.hasValue,
+      skipError: product.hasValue,
       loading: () => const SingleChildScrollView(
         child: StorefrontLoadingView(label: 'Loading this piece'),
       ),

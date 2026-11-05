@@ -34,9 +34,17 @@ class _ProductDetailsPageState extends ConsumerState<ProductDetailsPage> {
   void didUpdateWidget(covariant ProductDetailsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.product != widget.product) {
+      // Fresh data for the same product: keep the customer's choice unless it
+      // has just become impossible.
       _rules = VariantRules(widget.product);
-      _selection = _rules.initial();
-      _quantity = 1;
+      if (_rules.canAddToBag(_selection)) {
+        final limit = _rules.stockLimit(_selection);
+        _quantity = _quantity > limit ? limit : _quantity;
+      } else if (!_rules.isSizeMissing(_selection) &&
+          !_rules.isColorMissing(_selection)) {
+        _selection = _rules.initial();
+        _quantity = 1;
+      }
     }
   }
 

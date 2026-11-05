@@ -20,6 +20,7 @@ import '../pages/shop_page.dart';
 import '../pages/wishlist_page.dart';
 import '../shell/storefront_shell.dart';
 import '../widgets/back_link_frame.dart';
+import '../widgets/refresh_orders_on_open.dart';
 import 'route_guards.dart';
 
 final storefrontRouterProvider = Provider<GoRouter>((ref) {
@@ -89,7 +90,7 @@ final storefrontRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const BackLinkFrame(
               label: 'Account',
               route: accountPath,
-              child: OrderHistoryScreen(),
+              child: RefreshOrdersOnOpen(child: OrderHistoryScreen()),
             ),
           ),
           GoRoute(
@@ -97,8 +98,11 @@ final storefrontRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => BackLinkFrame(
               label: 'Your Orders',
               route: '/account/orders',
-              child: CustomerOrderDetailsScreen(
-                orderId: state.pathParameters['orderId']!,
+              child: RefreshOrdersOnOpen(
+                orderId: state.pathParameters['orderId'],
+                child: CustomerOrderDetailsScreen(
+                  orderId: state.pathParameters['orderId']!,
+                ),
               ),
             ),
           ),

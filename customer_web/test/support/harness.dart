@@ -216,6 +216,7 @@ Future<ProviderContainer> pumpStorefront(
   required Future<List<Product>> Function() catalogue,
   Future<List<ProductCategory>> Function()? categories,
   Product? directProduct,
+  StorefrontCatalogRepository? catalogRepository,
   String location = '/',
   Size size = const Size(1280, 2400),
   AuthRepository? auth,
@@ -252,7 +253,7 @@ Future<ProviderContainer> pumpStorefront(
         ),
       ),
       storefrontCatalogRepositoryProvider.overrideWithValue(
-        FakeCatalogRepository(directProduct),
+        catalogRepository ?? FakeCatalogRepository(directProduct),
       ),
     ],
   );
