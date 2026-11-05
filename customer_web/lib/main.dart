@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/fonts.dart';
+import 'app/password_recovery.dart';
+import 'app/provider_retry.dart';
 import 'app/storefront_app.dart';
 import 'pages/storefront_unavailable_app.dart';
 
@@ -32,8 +34,10 @@ Future<void> main() async {
     await Supabase.initialize(
       url: config.url,
       publishableKey: config.publishableKey,
+      authOptions: const FlutterAuthClientOptions(detectSessionInUri: false),
     );
     client = Supabase.instance.client;
+    await completePasswordRecoveryLink(client.auth, Uri.base);
   } catch (_) {
     runApp(const StorefrontUnavailableApp());
     return;
@@ -48,6 +52,7 @@ Future<void> main() async {
 
   runApp(
     ProviderScope(
+      retry: storefrontProviderRetry,
       overrides: [
         supabaseConfigProvider.overrideWithValue(config),
         supabaseClientProvider.overrideWithValue(client),

@@ -3,21 +3,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:norve/core/auth/auth_providers.dart';
 import 'package:norve/core/supabase/supabase_providers.dart';
-import 'package:norve/features/account/account_screen.dart';
 import 'package:norve/features/account/customer_order_details_screen.dart';
 import 'package:norve/features/account/order_history_screen.dart';
-import 'package:norve/features/account/password_reset_screen.dart';
 import 'package:norve/features/bag/bag_screen.dart';
 import 'package:norve/features/navigation/administrator_web_access_screen.dart';
 import 'package:norve/features/orders/checkout_screen.dart';
 import 'package:norve/features/wishlist/wishlist_screen.dart';
 
 import '../catalog/catalog_query.dart';
+import '../pages/account_page.dart';
+import '../pages/auth_page.dart';
 import '../pages/home_page.dart';
 import '../pages/not_found_page.dart';
+import '../pages/password_reset_page.dart';
 import '../pages/product_route_page.dart';
 import '../pages/shop_page.dart';
 import '../shell/storefront_shell.dart';
+import '../widgets/back_link_frame.dart';
 import 'breakpoints.dart';
 import 'route_guards.dart';
 
@@ -79,17 +81,37 @@ final storefrontRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => _capped(const BagScreen()),
           ),
           GoRoute(
-            path: '/account',
-            builder: (context, state) => _capped(const AccountScreen()),
+            path: loginPath,
+            builder: (context, state) => AuthPage(
+              mode: AuthPageMode.signIn,
+              returnPath: state.uri.queryParameters['from'],
+            ),
+          ),
+          GoRoute(
+            path: registerPath,
+            builder: (context, state) => AuthPage(
+              mode: AuthPageMode.register,
+              returnPath: state.uri.queryParameters['from'],
+            ),
+          ),
+          GoRoute(
+            path: accountPath,
+            builder: (context, state) => const AccountPage(),
           ),
           GoRoute(
             path: '/account/orders',
-            builder: (context, state) => _capped(const OrderHistoryScreen()),
+            builder: (context, state) => const BackLinkFrame(
+              label: 'Account',
+              route: accountPath,
+              child: OrderHistoryScreen(),
+            ),
           ),
           GoRoute(
             path: '/account/orders/:orderId',
-            builder: (context, state) => _capped(
-              CustomerOrderDetailsScreen(
+            builder: (context, state) => BackLinkFrame(
+              label: 'Your Orders',
+              route: '/account/orders',
+              child: CustomerOrderDetailsScreen(
                 orderId: state.pathParameters['orderId']!,
               ),
             ),
@@ -101,8 +123,8 @@ final storefrontRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const CheckoutScreen(),
       ),
       GoRoute(
-        path: '/account/reset-password',
-        builder: (context, state) => const PasswordResetScreen(),
+        path: passwordResetPath,
+        builder: (context, state) => const PasswordResetPage(),
       ),
       GoRoute(
         path: '/administrator-access',

@@ -8,6 +8,7 @@ import 'package:norve/features/orders/order_providers.dart';
 import 'package:norve/features/wishlist/wishlist_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'route_guards.dart';
 import 'router.dart';
 
 class StorefrontApp extends ConsumerWidget {
@@ -33,7 +34,7 @@ class StorefrontApp extends ConsumerWidget {
     });
     ref.listen(authEventsProvider, (previous, next) {
       if (next.asData?.value == AuthChangeEvent.passwordRecovery) {
-        router.go('/account/reset-password');
+        router.go(passwordResetPath);
       }
     });
 

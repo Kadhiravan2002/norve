@@ -17,25 +17,50 @@ void main() {
       '/product/abc',
       '/wishlist',
       '/bag',
-      '/account',
+      '/login',
+      '/register',
       '/account/reset-password',
     ]) {
       test('can open $path', () => expect(redirect(path), isNull));
     }
 
+    test('are sent from the account page to sign-in', () {
+      expect(redirect('/account'), '/login');
+    });
+
     test('are sent to sign-in from checkout, keeping the destination', () {
       final target = Uri.parse(redirect('/checkout')!);
-      expect(target.path, '/account');
+      expect(target.path, '/login');
       expect(target.queryParameters['from'], '/checkout');
     });
 
     test('are sent to sign-in from orders, keeping the full destination', () {
       final target = Uri.parse(redirect('/account/orders/abc?x=1')!);
-      expect(target.path, '/account');
+      expect(target.path, '/login');
       expect(target.queryParameters['from'], '/account/orders/abc?x=1');
       expect(
         Uri.parse(redirect('/account/orders')!).queryParameters['from'],
         '/account/orders',
+      );
+    });
+  });
+
+  group('password reset links', () {
+    test('lose their one-time code from the address bar', () {
+      expect(
+        redirect('/account/reset-password?code=abc'),
+        '/account/reset-password',
+      );
+      expect(
+        redirect('/account/reset-password#error=access_denied'),
+        '/account/reset-password',
+      );
+    });
+
+    test('still work for an administrator', () {
+      expect(
+        redirect('/account/reset-password', signedIn: true, admin: true),
+        isNull,
       );
     });
   });
@@ -48,13 +73,16 @@ void main() {
     });
 
     test('return to the page they came from after sign-in', () {
-      expect(
-        redirect('/account?from=%2Fcheckout', signedIn: true),
-        '/checkout',
-      );
+      expect(redirect('/login?from=%2Fcheckout', signedIn: true), '/checkout');
+      expect(redirect('/register?from=%2Fbag', signedIn: true), '/bag');
     });
 
-    test('stay on the account page when there is no destination', () {
+    test('go to their account from sign-in when there is no destination', () {
+      expect(redirect('/login', signedIn: true), '/account');
+      expect(redirect('/register', signedIn: true), '/account');
+    });
+
+    test('can open their account page', () {
       expect(redirect('/account', signedIn: true), isNull);
     });
   });
@@ -75,13 +103,18 @@ void main() {
 
     test('an unsafe from value is ignored after sign-in', () {
       expect(
-        redirect('/account?from=https%3A%2F%2Fevil.example', signedIn: true),
-        isNull,
+        redirect('/login?from=https%3A%2F%2Fevil.example', signedIn: true),
+        '/account',
       );
       expect(
-        redirect('/account?from=%2F%2Fevil.example', signedIn: true),
-        isNull,
+        redirect('/login?from=%2F%2Fevil.example', signedIn: true),
+        '/account',
       );
+    });
+
+    test('an unsafe from value is dropped from sign-in links', () {
+      expect(authLocation('/register', '//evil.example'), '/register');
+      expect(authLocation('/register', '/bag'), '/register?from=%2Fbag');
     });
 
     test('accepts a same-site path', () {

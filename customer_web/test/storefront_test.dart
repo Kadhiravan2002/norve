@@ -97,7 +97,7 @@ void main() {
       );
       await settle(tester);
       final uri = currentUri(container);
-      expect(uri.path, '/account');
+      expect(uri.path, '/login');
       expect(uri.queryParameters['from'], '/checkout');
     });
 

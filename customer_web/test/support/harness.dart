@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:norve/core/auth/auth_providers.dart';
@@ -8,6 +11,8 @@ import 'package:norve/core/supabase/supabase_config.dart';
 import 'package:norve/core/supabase/supabase_providers.dart';
 import 'package:norve/features/products/product.dart';
 import 'package:norve/features/products/product_repository.dart';
+import 'package:norve_customer_web/app/password_recovery.dart';
+import 'package:norve_customer_web/app/provider_retry.dart';
 import 'package:norve_customer_web/app/router.dart';
 import 'package:norve_customer_web/app/storefront_app.dart';
 import 'package:norve_customer_web/catalog/storefront_catalog_repository.dart';
@@ -117,6 +122,69 @@ class GuestAuthRepository implements AuthRepository {
   Future<void> updatePassword(String password) async {}
 }
 
+/// An account service whose session and responses each test controls.
+class FakeAuthRepository implements AuthRepository {
+  FakeAuthRepository({this.session, this.onSignIn, this.onSignUp});
+
+  static const customer = AuthSession(
+    userId: 'user-1',
+    email: 'customer@example.test',
+  );
+
+  AuthSession? session;
+  Future<AuthActionResult> Function()? onSignIn;
+  Future<AuthActionResult> Function()? onSignUp;
+  int signInCalls = 0;
+  String? resetEmail;
+  String? resetRedirect;
+  final _changes = StreamController<AuthSession?>.broadcast();
+
+  void setSession(AuthSession? value) {
+    session = value;
+    _changes.add(value);
+  }
+
+  Future<AuthActionResult> _signedIn() async {
+    setSession(customer);
+    return const AuthActionResult(session: customer);
+  }
+
+  @override
+  AuthSession? get currentSession => session;
+  @override
+  Stream<AuthSession?> watchSession() => Stream.multi((sink) {
+    sink.add(session);
+    final subscription = _changes.stream.listen(sink.add);
+    sink.onCancel = subscription.cancel;
+  });
+  @override
+  Stream<AuthChangeEvent?> watchAuthEvents() => const Stream.empty();
+  @override
+  Future<AuthActionResult> signIn({
+    required String email,
+    required String password,
+  }) {
+    signInCalls++;
+    return (onSignIn ?? _signedIn)();
+  }
+
+  @override
+  Future<AuthActionResult> signUp({
+    required String email,
+    required String password,
+  }) => (onSignUp ?? _signedIn)();
+  @override
+  Future<void> signOut() async => setSession(null);
+  @override
+  Future<void> sendPasswordReset(String email, {String? redirectTo}) async {
+    resetEmail = email;
+    resetRedirect = redirectTo;
+  }
+
+  @override
+  Future<void> updatePassword(String password) async {}
+}
+
 Future<ProviderContainer> pumpStorefront(
   WidgetTester tester, {
   required Future<List<Product>> Function() catalogue,
@@ -124,12 +192,15 @@ Future<ProviderContainer> pumpStorefront(
   Product? directProduct,
   String location = '/',
   Size size = const Size(1280, 2400),
+  AuthRepository? auth,
+  List<Override> overrides = const [],
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 
   final container = ProviderContainer(
+    retry: storefrontProviderRetry,
     overrides: [
       supabaseConfigProvider.overrideWithValue(
         const SupabaseConfig(
@@ -144,7 +215,9 @@ Future<ProviderContainer> pumpStorefront(
           authOptions: const AuthClientOptions(autoRefreshToken: false),
         ),
       ),
-      authRepositoryProvider.overrideWithValue(GuestAuthRepository()),
+      authRepositoryProvider.overrideWithValue(auth ?? GuestAuthRepository()),
+      siteBaseUriProvider.overrideWithValue(Uri.parse('https://norve.test/')),
+      ...overrides,
       productRepositoryProvider.overrideWithValue(
         FakeProductRepository(
           catalogue,
