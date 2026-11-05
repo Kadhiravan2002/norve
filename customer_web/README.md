@@ -18,6 +18,14 @@ flutter analyze
 flutter test
 ```
 
+## Install as an app
+
+The site is a PWA. In Chrome or Edge on Windows, use the install icon in the address bar. This needs HTTPS, which Vercel provides.
+
+`web/sw.js` handles caching. It saves only the app's own files, and always tries the network first, so a new release arrives straight away. Supabase requests (catalogue, stock, sign-in, checkout and orders) and product images bypass it, so they're never served from its cache. If its caching rules change, update `CACHE_NAME` in that file.
+
+The service worker doesn't run on `localhost`, so `flutter run` isn't affected. Flutter's own `flutter_service_worker.js` removes itself by design and isn't used.
+
 ## Deploy on Vercel
 
 Create a separate Vercel project from this repository. Don't change the admin project.

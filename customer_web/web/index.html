@@ -14,7 +14,9 @@
   <meta property="og:description" content="Considered essentials. Timeless silhouettes. Made for your everyday.">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <link rel="manifest" href="manifest.json">
+  <meta name="application-name" content="NORVÉ">
+  <!-- Credentials let the manifest load on a protected Vercel Preview. -->
+  <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
   <style>
     html, body { margin: 0; height: 100%; background: #F5F1EA; }
     #norve-splash {
@@ -50,6 +52,25 @@
       splash.style.opacity = '0';
       setTimeout(function () { splash.remove(); }, 220);
     });
+
+    // Without a connection or a saved copy of the app, explain rather than wait.
+    setTimeout(function () {
+      var splash = document.getElementById('norve-splash');
+      if (!splash || navigator.onLine) return;
+      var note = document.createElement('p');
+      note.textContent = 'NORVÉ needs a connection. Reconnect, then open it again.';
+      note.style.cssText = 'margin:24px 24px 0;font:14px Georgia,serif;text-align:center;';
+      splash.appendChild(note);
+    }, 8000);
+
+    // Not on localhost, so `flutter run` keeps its own files during development.
+    if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {
+          // The store works the same without it.
+        });
+      });
+    }
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
