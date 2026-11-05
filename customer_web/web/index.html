@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#F5F1EA">
+  <title>NORVÉ — Elevate Your Everyday</title>
+  <meta name="description" content="NORVÉ — considered essentials and timeless silhouettes, made for your everyday.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="NORVÉ">
+  <meta property="og:title" content="NORVÉ — Elevate Your Everyday">
+  <meta property="og:description" content="Considered essentials. Timeless silhouettes. Made for your everyday.">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html, body { margin: 0; height: 100%; background: #F5F1EA; }
+    #norve-splash {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; color: #24211E;
+      transition: opacity 200ms ease;
+    }
+    #norve-splash .mark {
+      font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+      font-size: 34px; font-weight: 500; letter-spacing: 7px; margin-left: 7px;
+    }
+    #norve-splash .line {
+      width: 96px; height: 1px; margin-top: 20px; overflow: hidden; background: #E8E2D9;
+    }
+    #norve-splash .line::after {
+      content: ""; display: block; width: 40%; height: 100%; background: #24211E;
+      animation: norve-load 1.4s ease-in-out infinite;
+    }
+    @keyframes norve-load { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+    @media (prefers-reduced-motion: reduce) { #norve-splash .line::after { animation: none; width: 100%; } }
+  </style>
+</head>
+<body>
+  <div id="norve-splash" role="status" aria-label="Loading NORVÉ">
+    <div class="mark">NORVÉ</div>
+    <div class="line"></div>
+  </div>
+  <noscript>NORVÉ needs JavaScript enabled to open the store.</noscript>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var splash = document.getElementById('norve-splash');
+      if (!splash) return;
+      splash.style.opacity = '0';
+      setTimeout(function () { splash.remove(); }, 220);
+    });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
